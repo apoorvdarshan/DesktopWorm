@@ -134,7 +134,7 @@ final class NeuralMapView: NSView {
         let points = normalizedPositions.map {
             CGPoint(x: nodeRect.minX + $0.x * nodeRect.width, y: nodeRect.minY + $0.y * nodeRect.height)
         }
-        drawEdges(points: points, context: context, limit: 520)
+        drawEdges(points: points, context: context, limit: 320, compact: true)
         drawNodes(points: points, context: context, labelLimit: 3)
     }
 
@@ -269,18 +269,44 @@ final class NeuralMapView: NSView {
         body.lineWidth = compact ? 0.55 : 0.8
         body.stroke()
 
-        let ringRect = CGRect(
-            x: point(0.22, 0.54).x - rect.width * 0.07,
-            y: point(0.22, 0.54).y - rect.height * 0.29,
-            width: rect.width * 0.14,
-            height: rect.height * 0.58
-        )
-        let ring = NSBezierPath(ovalIn: ringRect)
-        NSColor.systemPurple.withAlphaComponent(compact ? 0.055 : 0.075).setFill()
-        ring.fill()
-        NSColor.systemPurple.withAlphaComponent(compact ? 0.32 : 0.40).setStroke()
-        ring.lineWidth = compact ? 1.0 : 1.5
-        ring.stroke()
+        let ringCenter = point(0.20, 0.54)
+        for (index, scale) in [1.0, 0.74, 0.48].enumerated() {
+            let ringRect = CGRect(
+                x: ringCenter.x - rect.width * 0.105 * scale,
+                y: ringCenter.y - rect.height * 0.285 * scale,
+                width: rect.width * 0.21 * scale,
+                height: rect.height * 0.57 * scale
+            )
+            let ring = NSBezierPath(ovalIn: ringRect)
+            if index == 0 {
+                NSColor.systemPurple.withAlphaComponent(compact ? 0.045 : 0.065).setFill()
+                ring.fill()
+            }
+            NSColor.systemPurple.withAlphaComponent((compact ? 0.24 : 0.32) - CGFloat(index) * 0.045).setStroke()
+            ring.lineWidth = compact ? 0.65 : 1.0
+            ring.stroke()
+        }
+
+        for angle in stride(from: -1.0, through: 1.0, by: 0.5) {
+            let spoke = NSBezierPath()
+            spoke.move(to: point(0.20, 0.54))
+            spoke.line(to: point(0.20 + cos(angle) * 0.14, 0.54 + sin(angle) * 0.34))
+            NSColor.systemPurple.withAlphaComponent(compact ? 0.07 : 0.10).setStroke()
+            spoke.lineWidth = 0.45
+            spoke.stroke()
+        }
+
+        let pharynx = NSBezierPath(ovalIn: CGRect(
+            x: point(0.075, 0.54).x - rect.width * 0.034,
+            y: point(0.075, 0.54).y - rect.height * 0.13,
+            width: rect.width * 0.068,
+            height: rect.height * 0.26
+        ))
+        NSColor.systemMint.withAlphaComponent(compact ? 0.08 : 0.12).setFill()
+        pharynx.fill()
+        NSColor.systemMint.withAlphaComponent(compact ? 0.20 : 0.28).setStroke()
+        pharynx.lineWidth = compact ? 0.55 : 0.8
+        pharynx.stroke()
 
         let dorsal = NSBezierPath()
         dorsal.move(to: point(0.28, 0.66))
@@ -309,25 +335,25 @@ final class NeuralMapView: NSView {
         tail.stroke()
 
         let fontSize: CGFloat = compact ? 5.5 : 8.0
-        drawText("HEAD + NERVE RING", at: point(0.10, 0.88), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemPurple.withAlphaComponent(0.72))
-        drawText("VENTRAL NERVE CORD", at: point(0.43, 0.12), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemOrange.withAlphaComponent(0.65))
-        drawText("TAIL", at: point(0.89, 0.77), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemBlue.withAlphaComponent(0.65))
+        drawText("HEAD COMPLEX · 191", at: point(0.08, 0.90), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemPurple.withAlphaComponent(0.78))
+        drawText("VENTRAL CORD · 75", at: point(0.43, 0.12), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemOrange.withAlphaComponent(0.70))
+        drawText("TAIL · 22", at: point(0.87, 0.77), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemBlue.withAlphaComponent(0.70))
     }
 
-    private func drawEdges(points: [CGPoint], context: CGContext, limit: Int = .max) {
+    private func drawEdges(points: [CGPoint], context: CGContext, limit: Int = .max, compact: Bool = false) {
         context.saveGState()
         for edge in displayEdges.prefix(limit) {
             let sourceActivity = engine.activity[edge.source]
             let targetActivity = engine.activity[edge.target]
             let active = max(sourceActivity, targetActivity)
-            let alpha = min(0.34, 0.012 + active * 0.28)
+            let alpha = min(compact ? 0.24 : 0.34, (compact ? 0.006 : 0.012) + active * (compact ? 0.20 : 0.28))
             let color = edge.kind == "electrical"
                 ? NSColor.systemCyan.withAlphaComponent(alpha)
                 : (edge.sign < 0
                     ? NSColor.systemPink.withAlphaComponent(alpha)
                     : NSColor.white.withAlphaComponent(alpha))
             context.setStrokeColor(color.cgColor)
-            context.setLineWidth(active > 0.34 ? 0.75 : 0.35)
+            context.setLineWidth(active > 0.34 ? (compact ? 0.65 : 0.75) : (compact ? 0.25 : 0.35))
             context.beginPath()
             context.move(to: points[edge.source])
             context.addLine(to: points[edge.target])
@@ -343,7 +369,8 @@ final class NeuralMapView: NSView {
             .map(\.offset)
         let labeled = Set(topIndices)
 
-        for index in points.indices {
+        let drawOrder = points.indices.sorted { engine.activity[$0] < engine.activity[$1] }
+        for index in drawOrder {
             let activity = engine.activity[index]
             let neuron = engine.connectome.neurons[index]
             let baseColor = color(for: neuron.category)
@@ -364,14 +391,31 @@ final class NeuralMapView: NSView {
                 width: radius * 2,
                 height: radius * 2
             ))
-            if labeled.contains(index) {
-                drawText(
-                    neuron.id,
-                    at: CGPoint(x: points[index].x + 6, y: points[index].y + (index.isMultiple(of: 2) ? 3 : -11)),
-                    font: .monospacedSystemFont(ofSize: 8.5, weight: .semibold),
-                    color: baseColor.withAlphaComponent(0.92)
-                )
-            }
+        }
+
+        for (rank, index) in topIndices.enumerated() where labeled.contains(index) {
+            let neuron = engine.connectome.neurons[index]
+            let baseColor = color(for: neuron.category)
+            let text = neuron.id
+            let font = NSFont.monospacedSystemFont(ofSize: 8.5, weight: .bold)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font]
+            let textSize = (text as NSString).size(withAttributes: attributes)
+            let yOffsets: [CGFloat] = [10, -4, -18, 24, -32, 38, -46]
+            let labelPoint = CGPoint(x: points[index].x + 7, y: points[index].y + yOffsets[rank % yOffsets.count])
+            let pillRect = CGRect(x: labelPoint.x - 3, y: labelPoint.y - 2, width: textSize.width + 7, height: textSize.height + 4)
+            let leader = NSBezierPath()
+            leader.move(to: points[index])
+            leader.line(to: CGPoint(x: pillRect.minX, y: pillRect.midY))
+            baseColor.withAlphaComponent(0.45).setStroke()
+            leader.lineWidth = 0.55
+            leader.stroke()
+            let pill = NSBezierPath(roundedRect: pillRect, xRadius: 3.5, yRadius: 3.5)
+            NSColor(calibratedWhite: 0.025, alpha: 0.88).setFill()
+            pill.fill()
+            baseColor.withAlphaComponent(0.28).setStroke()
+            pill.lineWidth = 0.5
+            pill.stroke()
+            drawText(text, at: labelPoint, font: font, color: baseColor.withAlphaComponent(0.98))
         }
     }
 
@@ -551,10 +595,42 @@ final class NeuralMapView: NSView {
         var result = Array(repeating: CGPoint.zero, count: neurons.count)
 
         let anteriorComplex = neurons.indices.filter { anatomicalRegion(for: neurons[$0]) == .anteriorComplex }
-        for (offset, index) in anteriorComplex.enumerated() {
-            let fraction = sqrt((CGFloat(offset) + 0.65) / CGFloat(max(1, anteriorComplex.count)))
-            let angle = CGFloat(offset) * 2.39996323
-            result[index] = CGPoint(x: 0.22 + cos(angle) * 0.13 * fraction, y: 0.54 + sin(angle) * 0.30 * fraction)
+        let anteriorSensory = anteriorComplex.filter { neurons[$0].category == .sensory }
+        let anteriorInterneurons = anteriorComplex.filter { neurons[$0].category == .interneuron }
+        let anteriorMotor = anteriorComplex.filter { neurons[$0].category == .motor }
+
+        let sensoryCenters = [
+            CGPoint(x: 0.09, y: 0.68), CGPoint(x: 0.09, y: 0.40),
+            CGPoint(x: 0.15, y: 0.78), CGPoint(x: 0.15, y: 0.30),
+            CGPoint(x: 0.25, y: 0.74), CGPoint(x: 0.25, y: 0.34),
+        ]
+        for (offset, index) in anteriorSensory.enumerated() {
+            let center = sensoryCenters[offset % sensoryCenters.count]
+            let localIndex = offset / sensoryCenters.count
+            let localCount = max(1, Int(ceil(Double(anteriorSensory.count) / Double(sensoryCenters.count))))
+            let radius = sqrt((CGFloat(localIndex) + 0.6) / CGFloat(localCount))
+            let angle = CGFloat(localIndex) * 2.39996323 + CGFloat(offset % sensoryCenters.count) * 0.7
+            result[index] = CGPoint(x: center.x + cos(angle) * 0.030 * radius, y: center.y + sin(angle) * 0.060 * radius)
+        }
+
+        let interneuronRadii: [(CGFloat, CGFloat)] = [(0.040, 0.105), (0.060, 0.155), (0.080, 0.205), (0.101, 0.260)]
+        for (offset, index) in anteriorInterneurons.enumerated() {
+            let ring = offset % interneuronRadii.count
+            let position = offset / interneuronRadii.count
+            let count = max(1, Int(ceil(Double(anteriorInterneurons.count - ring) / Double(interneuronRadii.count))))
+            let angle = CGFloat(position) / CGFloat(count) * .pi * 2 + CGFloat(ring) * 0.36
+            let radii = interneuronRadii[ring]
+            result[index] = CGPoint(x: 0.20 + cos(angle) * radii.0, y: 0.54 + sin(angle) * radii.1)
+        }
+
+        let motorCenters = [CGPoint(x: 0.285, y: 0.65), CGPoint(x: 0.31, y: 0.54), CGPoint(x: 0.285, y: 0.43)]
+        for (offset, index) in anteriorMotor.enumerated() {
+            let center = motorCenters[offset % motorCenters.count]
+            let localIndex = offset / motorCenters.count
+            let localCount = max(1, Int(ceil(Double(anteriorMotor.count) / Double(motorCenters.count))))
+            let radius = sqrt((CGFloat(localIndex) + 0.5) / CGFloat(localCount))
+            let angle = CGFloat(localIndex) * 2.39996323 + CGFloat(offset % motorCenters.count)
+            result[index] = CGPoint(x: center.x + cos(angle) * 0.030 * radius, y: center.y + sin(angle) * 0.055 * radius)
         }
 
         let cordLane: [String: CGFloat] = [

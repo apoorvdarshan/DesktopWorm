@@ -16,9 +16,10 @@ connectome activity window. The model includes:
 
 The desktop body is a translucent ivory/amber rendering with a tapered head
 and tail, subtle pharynx and intestine, and fine cuticle rings. Its articulated
-40-point centerline holds a fixed body length. A traveling curvature wave
-generates traction rather than letting the worm slide independently of its
-body motion. The behavior controller supports forward crawling, touch-driven
+40-point centerline holds a fixed body length. An inertial body chain follows a
+head-to-tail curvature wave with pulsed traction, lateral head excursion and
+smooth gait transitions, so translation remains visibly coupled to bending.
+The behavior controller supports forward crawling, touch-driven
 reversal, sensory pauses, exploratory head sweeps, shallow turns, deep turns,
 slow approaches, dwelling, omega turns, collision recovery and pause. Cursor
 chemotaxis is staged: the worm samples a target, visibly reorients its body,
@@ -27,9 +28,10 @@ the pointer.
 
 The Living Connectome opens as a compact 520 × 340 floating HUD in the
 bottom-right of the active display. It shows all 302 neurons inside a
-whole-worm nervous-system schematic: a dense head-ganglia and nerve-ring field, longitudinal
-cords, the numbered ventral-cord motor classes ordered along the body, body
-sensory cells and a posterior ganglia cluster. Activity-weighted connections,
+whole-worm nervous-system schematic: sensory head-ganglia rosettes around a
+layered nerve-ring neuropil, longitudinal cords, and the numbered ventral-cord
+motor classes ordered along the body, plus body sensory cells and a posterior
+ganglia cluster. Activity-weighted connections,
 the most active cells, command-interneuron drive, dorsal and ventral muscle
 activity, and the current autonomous behavior remain live. Resize it larger to
 reveal the rolling history, transmitters and expanded scientific boundary.

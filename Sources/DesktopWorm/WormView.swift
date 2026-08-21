@@ -45,6 +45,11 @@ final class WormWorld {
     private var targetNeedsDeepTurn = false
     private var pausedBehavior: WormBehavior?
     private var spontaneousIndex = 0
+    private var pointVelocities: [CGVector] = []
+    private var gaitAmplitude = 0.30
+    private var gaitFrequency = 0.90
+    private var gaitOmegaBias = 0.0
+    private var gaitTravelDirection = 1.0
 
     init() {
         rebuildBody()
@@ -126,21 +131,37 @@ final class WormWorld {
         let neuralBend = min(0.11, abs(imbalance) * 0.22)
         let locomotorDrive = profile.travelDirection < 0 ? lastMotor.reverse : lastMotor.forward
         let neuralGain = clamped(0.72 + locomotorDrive * 2.0, 0.72, 1.25)
-        let amplitude = profile.amplitude * neuralGain * (1 + lastMotor.arousal * 0.8) + neuralBend
-        let frequency = profile.frequency * (0.84 + locomotorDrive * 0.9 + lastMotor.arousal * 0.7)
-        phase += dt * 2 * .pi * frequency * profile.waveDirection
+        let targetAmplitude = profile.amplitude * neuralGain * (1 + lastMotor.arousal * 0.8) + neuralBend
+        let targetFrequency = profile.frequency * (0.84 + locomotorDrive * 0.9 + lastMotor.arousal * 0.7)
+        let gaitBlend = 1 - exp(-dt * 4.6)
+        gaitAmplitude += (targetAmplitude - gaitAmplitude) * gaitBlend
+        gaitFrequency += (targetFrequency - gaitFrequency) * gaitBlend
+        gaitOmegaBias += (profile.omegaBias - gaitOmegaBias) * (1 - exp(-dt * 5.8))
+        gaitTravelDirection += (profile.travelDirection - gaitTravelDirection) * (1 - exp(-dt * 6.4))
+        phase += dt * 2 * .pi * gaitFrequency * profile.waveDirection
 
         let neuralTurn = clamped((lastMotor.right - lastMotor.left) * 1.5, -0.42, 0.42)
-        heading += (profile.turnRate + neuralTurn) * dt
+        let headSweepGain: Double
+        switch behavior {
+        case .headSweep, .sensoryPause: headSweepGain = 1.35
+        case .localSearch, .dwelling: headSweepGain = 0.85
+        case .shallowTurn, .deepTurn, .omegaTurn, .pirouette: headSweepGain = 0.55
+        default: headSweepGain = 0.22
+        }
+        let waveSteer = cos(phase + 0.28) * gaitAmplitude * gaitFrequency * (0.10 + headSweepGain * 0.28)
+        heading += (profile.turnRate + neuralTurn + waveSteer) * dt
 
         // Propulsion is generated from body-wave power. With no bend or
         // oscillation, traction is zero and the worm cannot slide.
-        let wavePower = clamped(amplitude * frequency / 0.56, 0, 1)
-        let strokeTraction = 0.68 + 0.32 * abs(cos(phase))
-        let targetSpeed = profile.travelDirection * speedScale * profile.maxSpeed * wavePower * strokeTraction
-        speed += (targetSpeed - speed) * min(1, dt * 5.4)
-        head.x += cos(heading) * speed * dt
-        head.y += sin(heading) * speed * dt
+        let wavePower = clamped(gaitAmplitude * gaitFrequency / 0.56, 0, 1)
+        let strokeTraction = 0.34 + 0.66 * pow(abs(cos(phase - 0.35)), 0.72)
+        let targetSpeed = gaitTravelDirection * speedScale * profile.maxSpeed * wavePower * strokeTraction
+        speed += (targetSpeed - speed) * min(1, dt * 3.9)
+        let lateralVelocity = sin(phase) * gaitAmplitude * (3.8 + headSweepGain * 9.5)
+        let tangentX = cos(heading)
+        let tangentY = sin(heading)
+        head.x += (tangentX * speed - tangentY * lateralVelocity) * dt
+        head.y += (tangentY * speed + tangentX * lateralVelocity) * dt
 
         var collided = false
         let margin: CGFloat = 100
@@ -172,7 +193,7 @@ final class WormWorld {
             enter(.dwelling, for: 0.72)
         }
 
-        solveBody(amplitude: amplitude, omegaBias: profile.omegaBias, dt: dt)
+        solveBody(amplitude: gaitAmplitude, omegaBias: gaitOmegaBias, dt: dt)
     }
 
     func bodyPoints() -> [CGPoint] {
@@ -183,6 +204,17 @@ final class WormWorld {
         zip(points, points.dropFirst()).map {
             abs(hypot($1.x - $0.x, $1.y - $0.y) - Self.segmentLength)
         }.max() ?? 0
+    }
+
+    func bodyWaveEnergy() -> Double {
+        guard points.count > 3 else { return 0 }
+        var total = 0.0
+        for index in 1..<(points.count - 1) {
+            let incoming = atan2(points[index].y - points[index - 1].y, points[index].x - points[index - 1].x)
+            let outgoing = atan2(points[index + 1].y - points[index].y, points[index + 1].x - points[index].x)
+            total += abs(wrappedAngle(outgoing - incoming))
+        }
+        return total / Double(points.count - 2)
     }
 
     private func advanceBehavior(dt: Double) {
@@ -218,17 +250,17 @@ final class WormWorld {
             return
         }
 
-        if behavior == .forwardCrawl, spontaneousClock > 5.2 {
+        if behavior == .forwardCrawl, spontaneousClock > 3.4 {
             spontaneousClock = 0
             turnDirection *= -1
             let repertoire: [(WormBehavior, Double)] = [
-                (.headSweep, 1.55),
-                (.roaming, 3.4),
-                (.shallowTurn, 1.25),
-                (.localSearch, 3.0),
-                (.dwelling, 2.4),
-                (.pirouette, 3.0),
-                (.deepTurn, 1.4),
+                (.headSweep, 1.30),
+                (.roaming, 2.55),
+                (.shallowTurn, 1.00),
+                (.localSearch, 2.45),
+                (.dwelling, 1.85),
+                (.pirouette, 2.45),
+                (.deepTurn, 1.15),
             ]
             let next = repertoire[spontaneousIndex % repertoire.count]
             spontaneousIndex += 1
@@ -293,13 +325,21 @@ final class WormWorld {
             return
         }
 
+        if pointVelocities.count != Self.pointCount {
+            pointVelocities = Array(repeating: .zero, count: Self.pointCount)
+        }
+
         var desired = Array(repeating: CGPoint.zero, count: Self.pointCount)
         desired[0] = head
         for index in 1..<Self.pointCount {
             let t = Double(index) / Double(Self.pointCount - 1)
-            let envelope = pow(sin(.pi * t), 0.42)
-            let travelingWave = sin(phase - Double(index) * 0.49) * amplitude * envelope
-            let turnShape = omegaBias * sin(.pi * t)
+            let envelope = 0.24 + 0.76 * pow(max(0, sin(.pi * min(0.94, t))), 0.48)
+            let wavePhase = phase - Double(index) * 0.34
+            let primaryWave = sin(wavePhase)
+            let muscleAsymmetry = 0.14 * sin(wavePhase * 2 + 0.65)
+            let travelingWave = (primaryWave + muscleAsymmetry) * amplitude * envelope
+            let anteriorTurnEnvelope = sin(.pi * min(1, t * 1.18))
+            let turnShape = omegaBias * anteriorTurnEnvelope
             let segmentHeading = heading + travelingWave + turnShape
             desired[index] = CGPoint(
                 x: desired[index - 1].x - cos(segmentHeading) * Self.segmentLength,
@@ -307,16 +347,21 @@ final class WormWorld {
             )
         }
 
-        let follow = 1 - exp(-dt * 10.2)
+        let previousPoints = points
         points[0] = head
         for index in 1..<points.count {
-            points[index].x += (desired[index].x - points[index].x) * follow
-            points[index].y += (desired[index].y - points[index].y) * follow
+            let t = Double(index) / Double(points.count - 1)
+            let stiffness = 46 - t * 17
+            let damping = exp(-dt * (7.2 - t * 2.2))
+            pointVelocities[index].dx = (pointVelocities[index].dx + (desired[index].x - points[index].x) * stiffness * dt) * damping
+            pointVelocities[index].dy = (pointVelocities[index].dy + (desired[index].y - points[index].y) * stiffness * dt) * damping
+            points[index].x += pointVelocities[index].dx * dt
+            points[index].y += pointVelocities[index].dy * dt
         }
 
         // Repeated projection preserves body length while allowing the centerline
         // to relax toward the neural/motor-driven target curvature.
-        for _ in 0..<4 {
+        for _ in 0..<5 {
             points[0] = head
             for index in 1..<points.count {
                 let dx = points[index].x - points[index - 1].x
@@ -328,6 +373,12 @@ final class WormWorld {
                 )
             }
         }
+
+        pointVelocities[0] = .zero
+        for index in 1..<points.count {
+            pointVelocities[index].dx = (points[index].x - previousPoints[index].x) / max(dt, 0.001) * 0.82
+            pointVelocities[index].dy = (points[index].y - previousPoints[index].y) / max(dt, 0.001) * 0.82
+        }
     }
 
     private func rebuildBody() {
@@ -337,6 +388,7 @@ final class WormWorld {
                 y: head.y - sin(heading) * Double(index) * Self.segmentLength
             )
         }
+        pointVelocities = Array(repeating: .zero, count: Self.pointCount)
     }
 
     private func enter(_ next: WormBehavior, for duration: Double) {

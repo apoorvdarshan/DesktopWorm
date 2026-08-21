@@ -52,13 +52,14 @@ func renderNeuralPreview(connectome: Connectome, path: String) -> Int32 {
     let world = WormWorld()
     let size = CGSize(width: 520, height: 340)
     let bounds = CGRect(origin: .zero, size: size)
-    world.place(at: CGPoint(x: 520, y: 380))
+    let simulationBounds = CGRect(x: 0, y: 0, width: 1_200, height: 800)
+    world.place(at: CGPoint(x: 600, y: 400))
     let view = NeuralMapView(frame: bounds, engine: engine, world: world)
     for _ in 0..<360 {
         engine.step(dt: 1.0 / 60.0)
         world.update(
             dt: 1.0 / 60.0,
-            bounds: bounds,
+            bounds: simulationBounds,
             engine: engine,
             mouse: CGPoint(x: 1_000, y: 650)
         )
@@ -135,6 +136,10 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
     guard hypot(world.head.x - startingHead.x, world.head.y - startingHead.y) > 5 else {
         fputs("FAIL: body wave did not generate locomotion\n", stderr)
+        return 1
+    }
+    guard world.bodyWaveEnergy() > 0.025 else {
+        fputs("FAIL: locomotion translated without a visible articulated body wave\n", stderr)
         return 1
     }
 
@@ -250,6 +255,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print(String(format: "  baseline forward/reverse: %.3f / %.3f", baseline.forward, baseline.reverse))
     print(String(format: "  post-touch forward/reverse: %.3f / %.3f", touched.forward, touched.reverse))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
+    print(String(format: "  articulated body wave energy: %.4f rad/segment", world.bodyWaveEnergy()))
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
     print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")
     print("  Living Connectome history samples: \(neuralView.sampleCount)")
