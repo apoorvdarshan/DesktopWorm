@@ -28,6 +28,7 @@ RESOURCE_BUNDLE="$BUILD_DIR/DesktopWorm_DesktopWorm.bundle"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 cp -R "$RESOURCE_BUNDLE" "$APP_RESOURCES/"
+cp "$ROOT_DIR/CREDITS.md" "$APP_RESOURCES/"
 cp "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$APP_RESOURCES/"
 chmod +x "$APP_BINARY"
 
@@ -47,9 +48,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.9.2</string>
+  <string>0.9.3</string>
   <key>CFBundleVersion</key>
-  <string>12</string>
+  <string>13</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>LSUIElement</key>

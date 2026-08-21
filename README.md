@@ -89,4 +89,19 @@ are explicit modelling choices.
 This is a connectome-constrained interactive visualization, not a faithful
 digital organism and not a conscious or living animal.
 
-See `THIRD_PARTY_NOTICES.md` for data provenance and citations.
+## Credits
+
+Created by [Apoorv Darshan](https://github.com/apoorvdarshan). The transparent
+macOS connectome-organism concept was inspired by Denis Shiryaev's
+[DesktopFly](https://github.com/DenisSergeevitch/desktop-fly). DesktopWorm is a
+separate *C. elegans* implementation and does not bundle DesktopFly code,
+assets, or FlyWire data.
+
+Connectome data and metadata come from the
+[OpenWorm c302](https://github.com/openworm/c302) project and the Cook et al.
+whole-animal connectome reconstruction. Thanks to the OpenWorm contributors
+and the researchers whose work made this visualization possible.
+
+See [CREDITS.md](CREDITS.md) for full acknowledgements and scientific
+citations, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for data
+provenance and licensing.

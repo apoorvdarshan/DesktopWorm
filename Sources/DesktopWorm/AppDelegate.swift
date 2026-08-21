@@ -299,6 +299,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         A native macOS desktop organism using all 302 neurons and 95 muscles from the OpenWorm c302 C. elegans dataset.
 
         Scientific boundary: neuron identities and anatomical connections are dataset-derived. Neural equations, uncertain synaptic signs, sensory conversion, behavior selection and body physics are explicit modeling choices. The app does not reproduce measured thoughts, consciousness or a complete biological animal.
+
+        Created by Apoorv Darshan. Concept inspired by DesktopFly by Denis Shiryaev. Connectome data and framework by the OpenWorm c302 contributors, based on the Cook et al. whole-animal connectome.
+
+        Full credits and citations are bundled in CREDITS.md and THIRD_PARTY_NOTICES.md.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
