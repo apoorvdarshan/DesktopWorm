@@ -103,6 +103,15 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     let engine = NeuralEngine(connectome: connectome)
     for _ in 0..<300 { engine.step() }
     let baseline = engine.motorState()
+    let baselineDVA = engine.indexByName["DVA"].map { engine.activity[$0] } ?? 0
+    engine.setProprioceptiveState(headBend: 0.45, bodyCurvature: 0.22)
+    for _ in 0..<80 { engine.step() }
+    let proprioceptiveDVA = engine.indexByName["DVA"].map { engine.activity[$0] } ?? 0
+    guard proprioceptiveDVA > baselineDVA,
+          engine.activityChange.allSatisfy({ $0.isFinite && $0 >= 0 }) else {
+        fputs("FAIL: modeled SMD/DVA proprioceptive feedback is inactive\n", stderr)
+        return 1
+    }
     engine.stimulateTouch(1.4)
     for _ in 0..<120 { engine.step() }
     let touched = engine.motorState()
@@ -113,6 +122,10 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
     guard engine.muscles.allSatisfy({ $0.isFinite && $0 >= 0 && $0 <= 1 }) else {
         fputs("FAIL: muscle activity left valid range\n", stderr)
+        return 1
+    }
+    guard connectome.edges.prefix(300).contains(where: { engine.signalStrength(for: $0) > 0 }) else {
+        fputs("FAIL: active c302 edges have no visual signal flux\n", stderr)
         return 1
     }
     let touchChangedNetwork = zip(engine.activity, Array(repeating: 0.02, count: engine.activity.count))
@@ -265,6 +278,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print("  neuromuscular edges: \(connectome.muscleEdges.count)")
     print(String(format: "  baseline forward/reverse: %.3f / %.3f", baseline.forward, baseline.reverse))
     print(String(format: "  post-touch forward/reverse: %.3f / %.3f", touched.forward, touched.reverse))
+    print(String(format: "  DVA proprioceptive response: %.3f → %.3f", baselineDVA, proprioceptiveDVA))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
     print(String(format: "  articulated body wave energy: %.4f rad/segment", world.bodyWaveEnergy()))
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")

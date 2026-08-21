@@ -177,9 +177,13 @@ final class NeuralMapView: NSView {
         let path = NSBezierPath(roundedRect: rect, xRadius: 9, yRadius: 9)
         NSColor.white.withAlphaComponent(0.04).setFill()
         path.fill()
-        drawText("AVB/PVC", at: CGPoint(x: rect.minX + 10, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.7, weight: .semibold), color: .systemGreen)
-        drawText("AVA/AVD/AVE/RIM", at: CGPoint(x: rect.minX + 61, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.7, weight: .semibold), color: .systemPink)
-        drawText("autonomous repertoire · scientific boundary in expanded view", at: CGPoint(x: rect.maxX - 270, y: rect.minY + 11), font: .systemFont(ofSize: 7.2, weight: .regular), color: NSColor.white.withAlphaComponent(0.36))
+        let forward = engine.circuitActivity(["AVBL", "AVBR", "PVCL", "PVCR"])
+        let reverse = engine.circuitActivity(["AVAL", "AVAR", "AVDL", "AVDR", "AVEL", "AVER"])
+        let steering = engine.circuitActivity(["RIAL", "RIAR", "SMDDL", "SMDDR", "SMDVL", "SMDVR"])
+        drawText("FWD AVB/PVC \(Int((forward * 100).rounded()))", at: CGPoint(x: rect.minX + 10, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: .systemGreen)
+        drawText("REV AVA/AVD/AVE \(Int((reverse * 100).rounded()))", at: CGPoint(x: rect.minX + 100, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: .systemPink)
+        drawText("HEAD RIA/SMD \(Int((steering * 100).rounded()))", at: CGPoint(x: rect.minX + 218, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: .systemCyan)
+        drawText("pulse timing modeled", at: CGPoint(x: rect.maxX - 112, y: rect.minY + 11), font: .systemFont(ofSize: 6.7, weight: .regular), color: NSColor.white.withAlphaComponent(0.34))
     }
 
     private func drawBackground(_ context: CGContext) {
@@ -342,7 +346,8 @@ final class NeuralMapView: NSView {
 
     private func drawEdges(points: [CGPoint], context: CGContext, limit: Int = .max, compact: Bool = false) {
         context.saveGState()
-        for edge in displayEdges.prefix(limit) {
+        let visibleEdges = Array(displayEdges.prefix(limit))
+        for edge in visibleEdges {
             let sourceActivity = engine.activity[edge.source]
             let targetActivity = engine.activity[edge.target]
             let active = max(sourceActivity, targetActivity)
@@ -359,7 +364,34 @@ final class NeuralMapView: NSView {
             context.addLine(to: points[edge.target])
             context.strokePath()
         }
+        var packetCount = 0
+        let packetLimit = compact ? 42 : 110
+        for edge in visibleEdges where packetCount < packetLimit {
+            let signal = engine.signalStrength(for: edge)
+            guard signal > 0.035 else { continue }
+            let source = points[edge.source]
+            let target = points[edge.target]
+            let seed = Double((edge.source &* 31 &+ edge.target &* 17) % 101) / 101.0
+            let rate = 0.30 + min(0.75, Double(edge.weight) * 0.022)
+            let travel = (engine.time * rate + seed).truncatingRemainder(dividingBy: 1)
+            let color: NSColor = edge.kind == "electrical" ? .systemCyan : (edge.sign < 0 ? .systemPink : .systemMint)
+            drawSignalPacket(from: source, to: target, progress: travel, strength: signal, color: color, context: context, compact: compact)
+            if edge.kind == "electrical" {
+                drawSignalPacket(from: source, to: target, progress: 1 - travel, strength: signal, color: color, context: context, compact: compact)
+            }
+            packetCount += 1
+        }
         context.restoreGState()
+    }
+
+    private func drawSignalPacket(from source: CGPoint, to target: CGPoint, progress: Double, strength: Double, color: NSColor, context: CGContext, compact: Bool) {
+        let t = CGFloat(min(1, max(0, progress)))
+        let point = CGPoint(x: source.x + (target.x - source.x) * t, y: source.y + (target.y - source.y) * t)
+        let radius = CGFloat((compact ? 0.8 : 1.15) + strength * (compact ? 1.5 : 2.2))
+        context.setFillColor(color.withAlphaComponent(CGFloat(0.10 + strength * 0.20)).cgColor)
+        context.fillEllipse(in: CGRect(x: point.x - radius * 2.6, y: point.y - radius * 2.6, width: radius * 5.2, height: radius * 5.2))
+        context.setFillColor(color.withAlphaComponent(CGFloat(0.62 + strength * 0.32)).cgColor)
+        context.fillEllipse(in: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2))
     }
 
     private func drawNodes(points: [CGPoint], context: CGContext, labelLimit: Int = 7) {
@@ -382,6 +414,18 @@ final class NeuralMapView: NSView {
                     y: points[index].y - radius * 2.5,
                     width: radius * 5,
                     height: radius * 5
+                ))
+            }
+            let transient = min(1, engine.activityChange[index] * 1.8)
+            if transient > 0.12 {
+                let pulseRadius = radius * CGFloat(1.7 + transient * 1.6)
+                context.setStrokeColor(baseColor.withAlphaComponent(CGFloat(transient) * 0.42).cgColor)
+                context.setLineWidth(0.65)
+                context.strokeEllipse(in: CGRect(
+                    x: points[index].x - pulseRadius,
+                    y: points[index].y - pulseRadius,
+                    width: pulseRadius * 2,
+                    height: pulseRadius * 2
                 ))
             }
             context.setFillColor(baseColor.withAlphaComponent(0.32 + activity * 0.68).cgColor)
@@ -428,7 +472,7 @@ final class NeuralMapView: NSView {
             color: NSColor.white.withAlphaComponent(0.58)
         )
         drawText("AVB/PVC", at: CGPoint(x: rect.maxX - 205, y: rect.maxY - 25), font: .monospacedSystemFont(ofSize: 8.5, weight: .medium), color: .systemGreen)
-        drawText("AVA/AVD/AVE/RIM", at: CGPoint(x: rect.maxX - 150, y: rect.maxY - 25), font: .monospacedSystemFont(ofSize: 8.5, weight: .medium), color: .systemPink)
+        drawText("AVA/AVD/AVE", at: CGPoint(x: rect.maxX - 150, y: rect.maxY - 25), font: .monospacedSystemFont(ofSize: 8.5, weight: .medium), color: .systemPink)
         drawText("MEAN", at: CGPoint(x: rect.maxX - 50, y: rect.maxY - 25), font: .monospacedSystemFont(ofSize: 8.5, weight: .medium), color: .systemOrange)
 
         let plot = CGRect(x: rect.minX + 14, y: rect.minY + 13, width: rect.width - 28, height: rect.height - 48)
@@ -474,7 +518,7 @@ final class NeuralMapView: NSView {
         let state = engine.motorState()
         let stats = [
             ("AVB/PVC forward", state.forward, NSColor.systemGreen),
-            ("AVA/AVD/AVE/RIM reverse", state.reverse, NSColor.systemPink),
+            ("AVA/AVD/AVE reverse", state.reverse, NSColor.systemPink),
             ("Dorsal muscles", state.dorsalMuscle, NSColor.systemCyan),
             ("Ventral muscles", state.ventralMuscle, NSColor.systemPurple),
             ("Network mean", state.arousal, NSColor.systemOrange),

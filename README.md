@@ -36,6 +36,13 @@ the most active cells, command-interneuron drive, dorsal and ventral muscle
 activity, and the current autonomous behavior remain live. Resize it larger to
 reveal the rolling history, transmitters and expanded scientific boundary.
 
+Active chemical connections carry directional packets; electrical gap
+junctions carry paired packets in both directions. The edges, weights and
+connection types are c302-derived, while packet timing is explicitly modeled.
+The modeled sensorimotor loop also feeds head bend back through SMD neurons and
+whole-body curvature through DVA, reflecting their experimentally supported
+proprioceptive roles without claiming measured voltages or calcium traces.
+
 c302 does not provide measured per-neuron spatial coordinates in the compact
 source used here. The display therefore labels this as a region- and
 class-derived anatomy schematic; it does not claim that dot positions are

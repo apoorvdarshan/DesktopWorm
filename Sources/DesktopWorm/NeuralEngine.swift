@@ -15,6 +15,7 @@ final class NeuralEngine {
     let indexByName: [String: Int]
 
     private(set) var activity: [Double]
+    private(set) var activityChange: [Double]
     private(set) var membrane: [Double]
     private(set) var muscles: [Double]
     private(set) var time: Double = 0
@@ -23,11 +24,14 @@ final class NeuralEngine {
     private var randomState: UInt64 = 0xC0FFEE302
     private var touchEnvelope: Double = 0
     private var foodEnvelope: Double = 0
+    private var headBendFeedback: Double = 0
+    private var bodyCurvatureFeedback: Double = 0
 
     init(connectome: Connectome) {
         self.connectome = connectome
         self.indexByName = Dictionary(uniqueKeysWithValues: connectome.neurons.enumerated().map { ($1.id, $0) })
         self.activity = Array(repeating: 0.02, count: connectome.neurons.count)
+        self.activityChange = Array(repeating: 0, count: connectome.neurons.count)
         self.membrane = Array(repeating: -1.5, count: connectome.neurons.count)
         self.external = Array(repeating: 0, count: connectome.neurons.count)
         self.muscles = Array(repeating: 0, count: connectome.muscles.count)
@@ -35,12 +39,20 @@ final class NeuralEngine {
 
     func reset() {
         activity = Array(repeating: 0.02, count: connectome.neurons.count)
+        activityChange = Array(repeating: 0, count: connectome.neurons.count)
         membrane = Array(repeating: -1.5, count: connectome.neurons.count)
         external = Array(repeating: 0, count: connectome.neurons.count)
         muscles = Array(repeating: 0, count: connectome.muscles.count)
         touchEnvelope = 0
         foodEnvelope = 0
+        headBendFeedback = 0
+        bodyCurvatureFeedback = 0
         time = 0
+    }
+
+    func setProprioceptiveState(headBend: Double, bodyCurvature: Double) {
+        headBendFeedback = min(0.8, max(-0.8, headBend))
+        bodyCurvatureFeedback = min(0.35, max(0, bodyCurvature))
     }
 
     func stimulateTouch(_ strength: Double = 1) {
@@ -61,6 +73,15 @@ final class NeuralEngine {
         inject(["ASHL", "ASHR", "FLPL", "FLPR"], amount: touchEnvelope * 2.4)
         inject(["AWAL", "AWAR", "AWCL", "AWCR", "ASEL", "ASER"], amount: foodEnvelope * 2.1)
 
+        // SMD head neurons and DVA have experimentally supported
+        // proprioceptive roles. Screen-axis mapping and gains are modeled.
+        if headBendFeedback >= 0 {
+            inject(["SMDVL", "SMDVR"], amount: 0.10 + headBendFeedback * 1.6)
+        } else {
+            inject(["SMDDL", "SMDDR"], amount: 0.10 + abs(headBendFeedback) * 1.6)
+        }
+        inject(["DVA"], amount: 0.06 + bodyCurvatureFeedback * 2.8)
+
         // A light spontaneous sensory background keeps the complete network alive.
         let wander = 0.16 + 0.08 * sin(time * 0.73)
         inject(["AWBL", "AWBR", "AFDL", "AFDR"], amount: wander)
@@ -76,11 +97,14 @@ final class NeuralEngine {
         }
 
         for index in activity.indices {
+            let previousActivity = activity[index]
             let noise = (nextRandom() - 0.5) * 0.035
             membrane[index] += dt * ((-1.3 - membrane[index]) * 5.2 + current[index] * 8.5 + noise)
             let target = 1.0 / (1.0 + exp(-2.4 * (membrane[index] + 0.35)))
             activity[index] += (target - activity[index]) * min(1, dt * 12)
             activity[index] = min(1, max(0, activity[index]))
+            let instantaneousChange = abs(activity[index] - previousActivity) / max(dt, 0.001)
+            activityChange[index] += (min(3, instantaneousChange) - activityChange[index]) * min(1, dt * 15)
         }
 
         updateMuscles(dt: dt)
@@ -88,7 +112,7 @@ final class NeuralEngine {
 
     func motorState() -> MotorState {
         let forward = mean(["AVBL", "AVBR", "PVCL", "PVCR"])
-        let reverse = mean(["AVAL", "AVAR", "AVDL", "AVDR", "AVEL", "AVER", "RIML", "RIMR"])
+        let reverse = mean(["AVAL", "AVAR", "AVDL", "AVDR", "AVEL", "AVER"])
         let left = mean(["AIBL", "RIAL", "SMDDL", "SMDVL"])
         let right = mean(["AIBR", "RIAR", "SMDDR", "SMDVR"])
 
@@ -122,6 +146,19 @@ final class NeuralEngine {
             .sorted { $0.element > $1.element }
             .prefix(limit)
             .map { (connectome.neurons[$0.offset], $0.element) }
+    }
+
+    func circuitActivity(_ names: [String]) -> Double {
+        mean(names)
+    }
+
+    func signalStrength(for edge: NeuralEdge) -> Double {
+        let weight = log1p(Double(edge.weight)) / 3.5
+        let source = activity[edge.source]
+        if edge.kind == "electrical" {
+            return min(1, max(source, activity[edge.target]) * weight)
+        }
+        return min(1, source * weight)
     }
 
     private func inject(_ names: [String], amount: Double) {

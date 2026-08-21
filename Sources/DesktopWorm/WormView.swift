@@ -194,6 +194,10 @@ final class WormWorld {
         }
 
         solveBody(amplitude: gaitAmplitude, omegaBias: gaitOmegaBias, dt: dt)
+        engine.setProprioceptiveState(
+            headBend: signedHeadBend(),
+            bodyCurvature: bodyWaveEnergy()
+        )
     }
 
     func bodyPoints() -> [CGPoint] {
@@ -215,6 +219,13 @@ final class WormWorld {
             total += abs(wrappedAngle(outgoing - incoming))
         }
         return total / Double(points.count - 2)
+    }
+
+    func signedHeadBend() -> Double {
+        guard points.count > 6 else { return 0 }
+        let first = atan2(points[2].y - points[0].y, points[2].x - points[0].x)
+        let neck = atan2(points[6].y - points[4].y, points[6].x - points[4].x)
+        return wrappedAngle(first - neck)
     }
 
     private func advanceBehavior(dt: Double) {
