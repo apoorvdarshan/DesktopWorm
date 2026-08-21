@@ -59,16 +59,18 @@ func renderAnimatedPreviewFrames(connectome: Connectome, directory: String) -> I
     let simulationBounds = CGRect(x: -5_000, y: -5_000, width: 10_000, height: 10_000)
     let timeStep = 1.0 / 60.0
     let simulationStepsPerFrame = 4
-    let frameCount = 35
+    let frameCount = 75
     let mouse = CGPoint(x: 4_000, y: 4_000)
 
     world.place(at: .zero, heading: 0)
+    world.speedScale = 3.3
 
     // Let the neural and body dynamics settle into a steady crawl before capture.
     for _ in 0..<120 {
         engine.step(dt: timeStep)
         world.update(dt: timeStep, bounds: simulationBounds, engine: engine, mouse: mouse)
     }
+    world.place(at: CGPoint(x: -35, y: bounds.midY), heading: 0)
 
     let directoryURL = URL(fileURLWithPath: directory, isDirectory: true)
     do {
@@ -96,7 +98,7 @@ func renderAnimatedPreviewFrames(connectome: Connectome, directory: String) -> I
 
             if let context = NSGraphicsContext.current?.cgContext {
                 context.saveGState()
-                context.translateBy(x: bounds.midX, y: bounds.midY)
+                context.translateBy(x: world.head.x, y: world.head.y)
                 context.rotate(by: -world.heading)
                 context.translateBy(x: -world.head.x, y: -world.head.y)
                 view.draw(bounds)
