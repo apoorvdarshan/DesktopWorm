@@ -9,6 +9,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/apoorvdarshan/DesktopWorm/releases/latest"><strong>Download for macOS</strong></a>
+  ·
   <a href="https://youtu.be/IuXMyePoKhs"><strong>Watch the 41-second demo</strong></a>
   ·
   <a href="https://github.com/openworm/c302">OpenWorm c302</a>
@@ -84,7 +86,21 @@ class-derived anatomy schematic; it does not claim that dot positions are
 microscopy coordinates. Colors still identify sensory, interneuron and motor
 roles, while edges and neuron identities remain c302-derived.
 
-## Run
+## Install
+
+The downloadable app supports Apple Silicon and Intel Macs running macOS 13
+or later.
+
+1. Download `DesktopWorm-v0.9.4-macOS-universal.zip` from the
+   [latest release](https://github.com/apoorvdarshan/DesktopWorm/releases/latest).
+2. Unzip it and drag `DesktopWorm.app` into Applications.
+3. On the first launch, Control-click the app, choose **Open**, then confirm
+   **Open**.
+
+The current release is Developer ID signed but not yet notarized. macOS may
+therefore require the Control-click opening step above.
+
+### Build from source
 
 Requirements: macOS 13+ and Xcode Command Line Tools.
 
