@@ -2,6 +2,8 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static let connectomeWindowStyleMask: NSWindow.StyleMask = [.titled, .closable, .resizable]
+    static let repositoryURL = URL(string: "https://github.com/apoorvdarshan/DesktopWorm")!
+    static let developerXURL = URL(string: "https://x.com/apoorvdarshan")!
 
     private let engine: NeuralEngine
     private let world = WormWorld()
@@ -179,6 +181,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item("Reset Neural State", action: #selector(reset), key: "r"))
         menu.addItem(.separator())
         menu.addItem(item("About the Model", action: #selector(showAbout), key: ""))
+        menu.addItem(item("Star DesktopWorm on GitHub…", action: #selector(openRepository), key: ""))
+        menu.addItem(item("Follow @apoorvdarshan on X…", action: #selector(openDeveloperOnX), key: ""))
         menu.addItem(item("Quit DesktopWorm", action: #selector(quit), key: "q"))
         statusItem.menu = menu
     }
@@ -307,6 +311,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+
+    @objc private func openRepository() {
+        NSWorkspace.shared.open(Self.repositoryURL)
+    }
+
+    @objc private func openDeveloperOnX() {
+        NSWorkspace.shared.open(Self.developerXURL)
     }
 
     @objc private func quit() {

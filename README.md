@@ -66,7 +66,9 @@ Requirements: macOS 13+ and Xcode Command Line Tools.
 
 The Living Connectome is the app's only control window. Use the 🪱 menu-bar item
 to reopen it, inject touch or food stimuli, choose the crawl speed, hide or show
-internal anatomy, pause, reset or quit. Movement selection remains autonomous.
+internal anatomy, pause, reset or quit. The menu also links to the GitHub
+repository for starring and to [@apoorvdarshan on X](https://x.com/apoorvdarshan).
+Movement selection remains autonomous.
 The app does not request Accessibility, keyboard, camera, microphone or network
 permissions.
 

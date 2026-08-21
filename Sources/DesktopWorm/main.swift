@@ -318,6 +318,11 @@ func runSelfTest(connectome: Connectome) -> Int32 {
         fputs("FAIL: menu-bar worm is not a native monochrome template icon\n", stderr)
         return 1
     }
+    guard AppDelegate.repositoryURL.absoluteString == "https://github.com/apoorvdarshan/DesktopWorm",
+          AppDelegate.developerXURL.absoluteString == "https://x.com/apoorvdarshan" else {
+        fputs("FAIL: menu-bar community links are invalid\n", stderr)
+        return 1
+    }
 
     print("PASS: OpenWorm graph loaded")
     print("  neurons: \(connectome.neurons.count)")
@@ -338,6 +343,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print("  compact HUD placement: bottom-right on active display")
     print("  title-bar safe area: native content separation")
     print("  menu-bar icon: adaptive monochrome template")
+    print("  menu-bar links: GitHub repository + developer on X")
     return 0
 }
 
