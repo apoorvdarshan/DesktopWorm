@@ -114,8 +114,23 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
 
     world.triggerFood(engine: engine)
-    guard world.behavior == .foodSeek else {
-        fputs("FAIL: food signal did not select food-seeking behavior\n", stderr)
+    guard world.behavior == .sensoryPause else {
+        fputs("FAIL: food signal did not begin staged chemotaxis\n", stderr)
+        return 1
+    }
+    var observedChemotaxisBehaviors: Set<WormBehavior> = [world.behavior]
+    for _ in 0..<380 {
+        engine.step(dt: 1.0 / 60.0)
+        world.update(dt: 1.0 / 60.0, bounds: simulationBounds, engine: engine, mouse: quietMouse)
+        observedChemotaxisBehaviors.insert(world.behavior)
+    }
+    let sawBodyTurn = observedChemotaxisBehaviors.contains(.shallowTurn)
+        || observedChemotaxisBehaviors.contains(.deepTurn)
+    guard observedChemotaxisBehaviors.contains(.headSweep),
+          sawBodyTurn,
+          observedChemotaxisBehaviors.contains(.approachCrawl),
+          observedChemotaxisBehaviors.contains(.dwelling) else {
+        fputs("FAIL: chemotaxis skipped a visible movement stage\n", stderr)
         return 1
     }
     world.setPaused(true)
@@ -135,7 +150,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print(String(format: "  baseline forward/reverse: %.3f / %.3f", baseline.forward, baseline.reverse))
     print(String(format: "  post-touch forward/reverse: %.3f / %.3f", touched.forward, touched.reverse))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
-    print("  behaviors: crawl, reverse, head sweep, omega turn, food seek, recovery, pause")
+    print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
     return 0
 }
 

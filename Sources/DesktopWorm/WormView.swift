@@ -1,11 +1,15 @@
 import AppKit
 
-enum WormBehavior: String {
+enum WormBehavior: String, Hashable {
     case forwardCrawl = "Forward crawl"
     case reverseEscape = "Touch reverse"
+    case sensoryPause = "Sensing cursor"
     case headSweep = "Head sweep"
+    case shallowTurn = "Shallow turn"
+    case deepTurn = "Deep turn"
+    case approachCrawl = "Slow approach"
+    case dwelling = "Dwelling"
     case omegaTurn = "Omega turn"
-    case foodSeek = "Food seeking"
     case collisionRecovery = "Collision recovery"
     case paused = "Paused"
 }
@@ -33,6 +37,9 @@ final class WormWorld {
     private var lastMouse: CGPoint?
     private var foodPulseClock = 0.0
     private var spontaneousClock = 0.0
+    private var cursorEngagementCooldown = 0.0
+    private var chemotaxisTarget: CGPoint?
+    private var targetNeedsDeepTurn = false
     private var pausedBehavior: WormBehavior?
 
     init() {
@@ -46,13 +53,17 @@ final class WormWorld {
 
     func triggerTouch(engine: NeuralEngine) {
         engine.stimulateTouch(1.25)
+        chemotaxisTarget = nil
+        cursorEngagementCooldown = 2.0
         turnDirection *= -1
         enter(.reverseEscape, for: 1.15)
     }
 
     func triggerFood(engine: NeuralEngine) {
         engine.stimulateFood(1.4)
-        enter(.foodSeek, for: 2.8)
+        chemotaxisTarget = nil
+        cursorEngagementCooldown = 5.5
+        enter(.sensoryPause, for: 0.36)
     }
 
     func setPaused(_ paused: Bool) {
@@ -71,6 +82,7 @@ final class WormWorld {
         lastMotor = engine.motorState()
         behaviorClock += dt
         spontaneousClock += dt
+        cursorEngagementCooldown = max(0, cursorEngagementCooldown - dt)
 
         let mouseVelocity: Double
         if let previous = lastMouse {
@@ -85,6 +97,18 @@ final class WormWorld {
             triggerTouch(engine: engine)
         }
 
+        if behavior == .sensoryPause, chemotaxisTarget == nil {
+            beginChemotaxis(toward: mouse)
+        } else if behavior == .forwardCrawl,
+                  cursorEngagementCooldown <= 0,
+                  distanceToMouse > 115,
+                  distanceToMouse < 470,
+                  mouseVelocity < 850 {
+            beginChemotaxis(toward: mouse)
+            enter(.sensoryPause, for: 0.36)
+            cursorEngagementCooldown = 4.8
+        }
+
         foodPulseClock -= dt
         if distanceToMouse > 130, distanceToMouse < 600, foodPulseClock <= 0 {
             engine.stimulateFood(0.30)
@@ -92,7 +116,7 @@ final class WormWorld {
         }
 
         advanceBehavior(dt: dt)
-        let profile = movementProfile(mouse: mouse, distanceToMouse: distanceToMouse)
+        let profile = movementProfile()
 
         let imbalance = lastMotor.dorsalMuscle - lastMotor.ventralMuscle
         let neuralBend = min(0.11, abs(imbalance) * 0.22)
@@ -108,7 +132,8 @@ final class WormWorld {
         // Propulsion is generated from body-wave power. With no bend or
         // oscillation, traction is zero and the worm cannot slide.
         let wavePower = clamped(amplitude * frequency / 0.56, 0, 1)
-        let targetSpeed = profile.travelDirection * speedScale * profile.maxSpeed * wavePower
+        let strokeTraction = 0.68 + 0.32 * abs(cos(phase))
+        let targetSpeed = profile.travelDirection * speedScale * profile.maxSpeed * wavePower * strokeTraction
         speed += (targetSpeed - speed) * min(1, dt * 5.4)
         head.x += cos(heading) * speed * dt
         head.y += sin(heading) * speed * dt
@@ -137,6 +162,12 @@ final class WormWorld {
             enter(.collisionRecovery, for: 0.72)
         }
 
+        if behavior == .approachCrawl,
+           let target = chemotaxisTarget,
+           hypot(target.x - head.x, target.y - head.y) < 72 {
+            enter(.dwelling, for: 0.72)
+        }
+
         solveBody(amplitude: amplitude, omegaBias: profile.omegaBias, dt: dt)
     }
 
@@ -157,6 +188,25 @@ final class WormWorld {
                 switch behavior {
                 case .reverseEscape, .collisionRecovery:
                     enter(.omegaTurn, for: 0.82)
+                case .sensoryPause:
+                    enter(.headSweep, for: 1.12)
+                case .headSweep:
+                    if chemotaxisTarget != nil {
+                        enter(targetNeedsDeepTurn ? .deepTurn : .shallowTurn, for: targetNeedsDeepTurn ? 1.15 : 0.92)
+                    } else {
+                        enter(.shallowTurn, for: 0.82)
+                    }
+                case .shallowTurn, .deepTurn:
+                    if chemotaxisTarget != nil {
+                        enter(.approachCrawl, for: 2.15)
+                    } else {
+                        enter(.forwardCrawl, for: 0)
+                    }
+                case .approachCrawl:
+                    enter(.dwelling, for: 0.72)
+                case .dwelling:
+                    chemotaxisTarget = nil
+                    enter(.forwardCrawl, for: 0)
                 default:
                     enter(.forwardCrawl, for: 0)
                 }
@@ -166,11 +216,12 @@ final class WormWorld {
 
         if behavior == .forwardCrawl, spontaneousClock > 5.2 {
             spontaneousClock = 0
+            turnDirection *= -1
             enter(.headSweep, for: 1.45)
         }
     }
 
-    private func movementProfile(mouse: CGPoint, distanceToMouse: Double) -> (
+    private func movementProfile() -> (
         travelDirection: Double,
         waveDirection: Double,
         amplitude: Double,
@@ -181,20 +232,28 @@ final class WormWorld {
     ) {
         switch behavior {
         case .forwardCrawl:
-            return (1, 1, 0.34, 1.25, 55, 0.07 * sin(behaviorClock * 0.55), 0)
+            return (1, 1, 0.40, 1.18, 43, 0.09 * sin(behaviorClock * 0.55), 0)
         case .reverseEscape:
-            return (-1, -1, 0.40, 1.62, 63, turnDirection * 0.18, 0)
+            return (-1, -1, 0.47, 1.48, 48, turnDirection * 0.18, 0)
+        case .sensoryPause:
+            return (0, 1, 0.09, 0.34, 0, 0, 0)
         case .headSweep:
-            return (0.18, 1, 0.27, 0.72, 40, turnDirection * 0.92 * sin(behaviorClock * 4.2), 0)
+            return (0.04, 1, 0.39, 0.58, 20, turnDirection * 1.08 * sin(behaviorClock * 4.8), 0)
+        case .shallowTurn:
+            return (0.22, 1, 0.46, 0.88, 30, turnDirection * 0.72, turnDirection * 0.22)
+        case .deepTurn:
+            return (0.10, 1, 0.56, 0.78, 25, turnDirection * 1.58, turnDirection * 0.62)
+        case .approachCrawl:
+            let target = chemotaxisTarget ?? head
+            let desired = atan2(target.y - head.y, target.x - head.x)
+            let error = wrappedAngle(desired - heading)
+            return (0.68, 1, 0.43, 1.02, 34, clamped(error * 0.42, -0.32, 0.32), clamped(error * 0.08, -0.10, 0.10))
+        case .dwelling:
+            return (0.02, 1, 0.20, 0.38, 14, 0.22 * sin(behaviorClock * 5.1), 0)
         case .omegaTurn:
-            return (0.32, 1, 0.48, 1.08, 45, turnDirection * 2.35, turnDirection * 0.72)
-        case .foodSeek:
-            let desired = atan2(mouse.y - head.y, mouse.x - head.x)
-            let seekingTurn = distanceToMouse > 20 ? clamped(wrappedAngle(desired - heading) * 1.45, -1.35, 1.35) : 0
-            let sweep = 0.28 * sin(behaviorClock * 3.6)
-            return (0.72, 1, 0.31, 1.10, 52, seekingTurn + sweep, 0)
+            return (0.24, 1, 0.58, 0.94, 30, turnDirection * 2.15, turnDirection * 0.78)
         case .collisionRecovery:
-            return (-0.72, -1, 0.42, 1.48, 58, turnDirection * 0.55, 0)
+            return (-0.64, -1, 0.49, 1.38, 44, turnDirection * 0.55, 0)
         case .paused:
             return (0, 0, 0, 0, 0, 0, 0)
         }
@@ -212,7 +271,7 @@ final class WormWorld {
             let t = Double(index) / Double(Self.pointCount - 1)
             let envelope = pow(sin(.pi * t), 0.42)
             let travelingWave = sin(phase - Double(index) * 0.49) * amplitude * envelope
-            let turnShape = omegaBias * pow(t, 0.72)
+            let turnShape = omegaBias * sin(.pi * t)
             let segmentHeading = heading + travelingWave + turnShape
             desired[index] = CGPoint(
                 x: desired[index - 1].x - cos(segmentHeading) * Self.segmentLength,
@@ -220,7 +279,7 @@ final class WormWorld {
             )
         }
 
-        let follow = 1 - exp(-dt * 13.5)
+        let follow = 1 - exp(-dt * 10.2)
         points[0] = head
         for index in 1..<points.count {
             points[index].x += (desired[index].x - points[index].x) * follow
@@ -256,6 +315,14 @@ final class WormWorld {
         behavior = next
         behaviorClock = 0
         behaviorRemaining = duration
+    }
+
+    private func beginChemotaxis(toward target: CGPoint) {
+        chemotaxisTarget = target
+        let desired = atan2(target.y - head.y, target.x - head.x)
+        let error = wrappedAngle(desired - heading)
+        turnDirection = error >= 0 ? 1 : -1
+        targetNeedsDeepTurn = abs(error) > 1.18
     }
 
     private func wrappedAngle(_ angle: Double) -> Double {

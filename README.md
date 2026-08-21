@@ -19,8 +19,11 @@ and tail, subtle pharynx and intestine, and fine cuticle rings. Its articulated
 40-point centerline holds a fixed body length. A traveling curvature wave
 generates traction rather than letting the worm slide independently of its
 body motion. The behavior controller supports forward crawling, touch-driven
-reversal, exploratory head sweeps, omega turns, food seeking, collision
-recovery and pause.
+reversal, sensory pauses, exploratory head sweeps, shallow turns, deep turns,
+slow approaches, dwelling, omega turns, collision recovery and pause. Cursor
+chemotaxis is staged: the worm samples a target, visibly reorients its body,
+then approaches the sampled position instead of being continuously dragged by
+the pointer.
 
 ## Run
 
