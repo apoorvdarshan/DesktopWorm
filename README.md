@@ -19,6 +19,9 @@ and tail, subtle pharynx and intestine, and fine cuticle rings. Its articulated
 40-point centerline holds a fixed body length. An inertial body chain follows a
 head-to-tail curvature wave with pulsed traction, lateral head excursion and
 smooth gait transitions, so translation remains visibly coupled to bending.
+Every body segment also participates in screen-boundary constraints: trailing
+segments reflect inward and form a fold along an edge rather than being clipped
+outside the desktop overlay.
 The behavior controller supports forward crawling, touch-driven
 reversal, sensory pauses, exploratory head sweeps, shallow turns, deep turns,
 slow approaches, dwelling, omega turns, collision recovery and pause. Cursor

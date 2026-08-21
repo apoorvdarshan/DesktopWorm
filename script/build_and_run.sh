@@ -9,7 +9,9 @@ MIN_SYSTEM_VERSION="13.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
-APP_CONTENTS="$APP_BUNDLE/Contents"
+STAGING_DIR="$(mktemp -d)"
+STAGING_BUNDLE="$STAGING_DIR/$APP_NAME.app"
+APP_CONTENTS="$STAGING_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
@@ -23,7 +25,6 @@ BUILD_DIR="$(swift build -c release --show-bin-path)"
 BUILD_BINARY="$BUILD_DIR/$APP_NAME"
 RESOURCE_BUNDLE="$BUILD_DIR/DesktopWorm_DesktopWorm.bundle"
 
-rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 cp "$BUILD_BINARY" "$APP_BINARY"
 cp -R "$RESOURCE_BUNDLE" "$APP_RESOURCES/"
@@ -46,9 +47,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.9.0</string>
+  <string>0.9.1</string>
   <key>CFBundleVersion</key>
-  <string>10</string>
+  <string>11</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>LSUIElement</key>
@@ -59,10 +60,15 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
-/usr/bin/xattr -cr "$APP_BUNDLE"
-/usr/bin/xattr -dr com.apple.FinderInfo "$APP_BUNDLE" 2>/dev/null || true
-/usr/bin/xattr -dr 'com.apple.fileprovider.fpfs#P' "$APP_BUNDLE" 2>/dev/null || true
-/usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
+/usr/bin/xattr -cr "$STAGING_BUNDLE"
+/usr/bin/codesign --force --deep --sign - "$STAGING_BUNDLE"
+/usr/bin/codesign --verify --deep --strict "$STAGING_BUNDLE"
+
+rm -rf "$APP_BUNDLE"
+mkdir -p "$DIST_DIR"
+/usr/bin/ditto "$STAGING_BUNDLE" "$APP_BUNDLE"
+rm -rf "$STAGING_DIR"
+APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"

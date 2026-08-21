@@ -55,8 +55,11 @@ final class WormWorld {
         rebuildBody()
     }
 
-    func place(at point: CGPoint) {
+    func place(at point: CGPoint, heading newHeading: Double? = nil) {
         head = point
+        if let newHeading {
+            heading = newHeading
+        }
         rebuildBody()
     }
 
@@ -193,7 +196,7 @@ final class WormWorld {
             enter(.dwelling, for: 0.72)
         }
 
-        solveBody(amplitude: gaitAmplitude, omegaBias: gaitOmegaBias, dt: dt)
+        solveBody(amplitude: gaitAmplitude, omegaBias: gaitOmegaBias, dt: dt, screenBounds: bounds)
         engine.setProprioceptiveState(
             headBend: signedHeadBend(),
             bodyCurvature: bodyWaveEnergy()
@@ -208,6 +211,17 @@ final class WormWorld {
         zip(points, points.dropFirst()).map {
             abs(hypot($1.x - $0.x, $1.y - $0.y) - Self.segmentLength)
         }.max() ?? 0
+    }
+
+    func minimumEdgeClearance(in bounds: CGRect) -> Double {
+        points.map { point in
+            min(
+                point.x - bounds.minX,
+                bounds.maxX - point.x,
+                point.y - bounds.minY,
+                bounds.maxY - point.y
+            )
+        }.min() ?? 0
     }
 
     func bodyWaveEnergy() -> Double {
@@ -330,7 +344,7 @@ final class WormWorld {
         }
     }
 
-    private func solveBody(amplitude: Double, omegaBias: Double, dt: Double) {
+    private func solveBody(amplitude: Double, omegaBias: Double, dt: Double, screenBounds: CGRect) {
         guard points.count == Self.pointCount else {
             rebuildBody()
             return
@@ -340,8 +354,10 @@ final class WormWorld {
             pointVelocities = Array(repeating: .zero, count: Self.pointCount)
         }
 
+        let bodyBounds = screenBounds.insetBy(dx: 15, dy: 15)
         var desired = Array(repeating: CGPoint.zero, count: Self.pointCount)
         desired[0] = head
+        var unconstrainedDesired = head
         for index in 1..<Self.pointCount {
             let t = Double(index) / Double(Self.pointCount - 1)
             let envelope = 0.24 + 0.76 * pow(max(0, sin(.pi * min(0.94, t))), 0.48)
@@ -352,10 +368,11 @@ final class WormWorld {
             let anteriorTurnEnvelope = sin(.pi * min(1, t * 1.18))
             let turnShape = omegaBias * anteriorTurnEnvelope
             let segmentHeading = heading + travelingWave + turnShape
-            desired[index] = CGPoint(
-                x: desired[index - 1].x - cos(segmentHeading) * Self.segmentLength,
-                y: desired[index - 1].y - sin(segmentHeading) * Self.segmentLength
+            unconstrainedDesired = CGPoint(
+                x: unconstrainedDesired.x - cos(segmentHeading) * Self.segmentLength,
+                y: unconstrainedDesired.y - sin(segmentHeading) * Self.segmentLength
             )
+            desired[index] = reflectedPoint(unconstrainedDesired, inside: bodyBounds)
         }
 
         let previousPoints = points
@@ -370,17 +387,16 @@ final class WormWorld {
             points[index].y += pointVelocities[index].dy * dt
         }
 
-        // Repeated projection preserves body length while allowing the centerline
-        // to relax toward the neural/motor-driven target curvature.
+        // Repeated projection preserves body length. A segment that would leave
+        // the overlay reflects inward, producing a visible fold at the screen
+        // boundary instead of allowing the tail to be clipped.
         for _ in 0..<5 {
             points[0] = head
             for index in 1..<points.count {
-                let dx = points[index].x - points[index - 1].x
-                let dy = points[index].y - points[index - 1].y
-                let distance = max(0.0001, hypot(dx, dy))
-                points[index] = CGPoint(
-                    x: points[index - 1].x + dx / distance * Self.segmentLength,
-                    y: points[index - 1].y + dy / distance * Self.segmentLength
+                points[index] = boundaryFoldedSegment(
+                    from: points[index - 1],
+                    toward: points[index],
+                    inside: bodyBounds
                 )
             }
         }
@@ -390,6 +406,47 @@ final class WormWorld {
             pointVelocities[index].dx = (points[index].x - previousPoints[index].x) / max(dt, 0.001) * 0.82
             pointVelocities[index].dy = (points[index].y - previousPoints[index].y) / max(dt, 0.001) * 0.82
         }
+    }
+
+    private func reflectedPoint(_ point: CGPoint, inside bounds: CGRect) -> CGPoint {
+        var reflected = point
+        if reflected.x < bounds.minX { reflected.x = bounds.minX + (bounds.minX - reflected.x) }
+        if reflected.x > bounds.maxX { reflected.x = bounds.maxX - (reflected.x - bounds.maxX) }
+        if reflected.y < bounds.minY { reflected.y = bounds.minY + (bounds.minY - reflected.y) }
+        if reflected.y > bounds.maxY { reflected.y = bounds.maxY - (reflected.y - bounds.maxY) }
+        return reflected
+    }
+
+    private func boundaryFoldedSegment(from anchor: CGPoint, toward target: CGPoint, inside bounds: CGRect) -> CGPoint {
+        var dx = target.x - anchor.x
+        var dy = target.y - anchor.y
+        let distance = max(0.0001, hypot(dx, dy))
+        dx = dx / distance * Self.segmentLength
+        dy = dy / distance * Self.segmentLength
+
+        var candidate = CGPoint(x: anchor.x + dx, y: anchor.y + dy)
+        if candidate.x < bounds.minX { dx = abs(dx) }
+        if candidate.x > bounds.maxX { dx = -abs(dx) }
+        if candidate.y < bounds.minY { dy = abs(dy) }
+        if candidate.y > bounds.maxY { dy = -abs(dy) }
+        candidate = CGPoint(x: anchor.x + dx, y: anchor.y + dy)
+
+        // Handles the rare corner case where the anchor is less than one
+        // segment from two edges while keeping the segment on-screen.
+        if !bounds.contains(candidate) {
+            let inward = CGPoint(
+                x: min(bounds.maxX, max(bounds.minX, candidate.x)),
+                y: min(bounds.maxY, max(bounds.minY, candidate.y))
+            )
+            let inwardDX = inward.x - anchor.x
+            let inwardDY = inward.y - anchor.y
+            let inwardDistance = max(0.0001, hypot(inwardDX, inwardDY))
+            candidate = CGPoint(
+                x: anchor.x + inwardDX / inwardDistance * Self.segmentLength,
+                y: anchor.y + inwardDY / inwardDistance * Self.segmentLength
+            )
+        }
+        return candidate
     }
 
     private func rebuildBody() {

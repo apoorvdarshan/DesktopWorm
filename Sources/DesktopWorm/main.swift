@@ -1,13 +1,17 @@
 import AppKit
 import Foundation
 
-func renderPreview(connectome: Connectome, path: String) -> Int32 {
+func renderPreview(connectome: Connectome, path: String, edgeFold: Bool = false) -> Int32 {
     _ = NSApplication.shared
     let engine = NeuralEngine(connectome: connectome)
     let world = WormWorld()
     let size = CGSize(width: 760, height: 220)
     let bounds = CGRect(origin: .zero, size: size)
-    world.place(at: CGPoint(x: 520, y: 110))
+    if edgeFold {
+        world.place(at: CGPoint(x: 390, y: 145), heading: -.pi / 2)
+    } else {
+        world.place(at: CGPoint(x: 520, y: 110))
+    }
     world.triggerFood(engine: engine)
     for _ in 0..<80 {
         engine.step(dt: 1.0 / 60.0)
@@ -38,7 +42,7 @@ func renderPreview(connectome: Connectome, path: String) -> Int32 {
 
     do {
         try png.write(to: URL(fileURLWithPath: path), options: .atomic)
-        print("PASS: offscreen preview rendered to \(path)")
+        print("PASS: \(edgeFold ? "edge-fold" : "offscreen") preview rendered to \(path)")
         return 0
     } catch {
         fputs("FAIL: could not write offscreen preview: \(error)\n", stderr)
@@ -153,6 +157,18 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
     guard world.bodyWaveEnergy() > 0.025 else {
         fputs("FAIL: locomotion translated without a visible articulated body wave\n", stderr)
+        return 1
+    }
+
+    let edgeWorld = WormWorld()
+    edgeWorld.place(at: CGPoint(x: 600, y: 650), heading: -.pi / 2)
+    for _ in 0..<12 {
+        engine.step(dt: 1.0 / 60.0)
+        edgeWorld.update(dt: 1.0 / 60.0, bounds: simulationBounds, engine: engine, mouse: quietMouse)
+    }
+    guard edgeWorld.minimumEdgeClearance(in: simulationBounds) >= 14.9,
+          edgeWorld.maximumSegmentError() < 0.001 else {
+        fputs("FAIL: trailing body clipped instead of folding at screen edge\n", stderr)
         return 1
     }
 
@@ -281,6 +297,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print(String(format: "  DVA proprioceptive response: %.3f → %.3f", baselineDVA, proprioceptiveDVA))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
     print(String(format: "  articulated body wave energy: %.4f rad/segment", world.bodyWaveEnergy()))
+    print(String(format: "  minimum edge-fold clearance: %.2f px", edgeWorld.minimumEdgeClearance(in: simulationBounds)))
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
     print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")
     print("  Living Connectome history samples: \(neuralView.sampleCount)")
@@ -299,6 +316,10 @@ do {
     if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-preview"),
        CommandLine.arguments.indices.contains(previewIndex + 1) {
         exit(renderPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1]))
+    }
+    if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-edge-preview"),
+       CommandLine.arguments.indices.contains(previewIndex + 1) {
+        exit(renderPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1], edgeFold: true))
     }
     if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-neural-preview"),
        CommandLine.arguments.indices.contains(previewIndex + 1) {
