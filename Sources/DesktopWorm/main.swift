@@ -50,6 +50,83 @@ func renderPreview(connectome: Connectome, path: String, edgeFold: Bool = false)
     }
 }
 
+func renderAnimatedPreviewFrames(connectome: Connectome, directory: String) -> Int32 {
+    _ = NSApplication.shared
+    let engine = NeuralEngine(connectome: connectome)
+    let world = WormWorld()
+    let size = CGSize(width: 760, height: 220)
+    let bounds = CGRect(origin: .zero, size: size)
+    let simulationBounds = CGRect(x: -5_000, y: -5_000, width: 10_000, height: 10_000)
+    let timeStep = 1.0 / 60.0
+    let simulationStepsPerFrame = 4
+    let frameCount = 35
+    let mouse = CGPoint(x: 4_000, y: 4_000)
+
+    world.place(at: .zero, heading: 0)
+
+    // Let the neural and body dynamics settle into a steady crawl before capture.
+    for _ in 0..<120 {
+        engine.step(dt: timeStep)
+        world.update(dt: timeStep, bounds: simulationBounds, engine: engine, mouse: mouse)
+    }
+
+    let directoryURL = URL(fileURLWithPath: directory, isDirectory: true)
+    do {
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+
+        for frameIndex in 0..<frameCount {
+            for _ in 0..<simulationStepsPerFrame {
+                engine.step(dt: timeStep)
+                world.update(dt: timeStep, bounds: simulationBounds, engine: engine, mouse: mouse)
+            }
+
+            let view = WormView(frame: bounds, world: world, engine: engine)
+            let image = NSImage(size: size)
+            image.lockFocus()
+            NSColor(
+                srgbRed: 24.0 / 255.0,
+                green: 24.0 / 255.0,
+                blue: 25.0 / 255.0,
+                alpha: 1
+            ).setFill()
+            bounds.fill()
+
+            if let context = NSGraphicsContext.current?.cgContext {
+                context.saveGState()
+                context.translateBy(x: bounds.midX, y: bounds.midY)
+                context.rotate(by: -world.heading)
+                context.translateBy(x: -world.head.x, y: -world.head.y)
+                view.draw(bounds)
+                context.restoreGState()
+            }
+            image.unlockFocus()
+
+            guard
+                let tiff = image.tiffRepresentation,
+                let bitmap = NSBitmapImageRep(data: tiff),
+                let png = bitmap.representation(using: .png, properties: [:])
+            else {
+                fputs("Unable to encode animated preview frame.\n", stderr)
+                return 1
+            }
+
+            let filename = String(format: "frame-%03d.png", frameIndex)
+            try png.write(
+                to: directoryURL.appendingPathComponent(filename),
+                options: .atomic
+            )
+        }
+    } catch {
+        fputs("Unable to render animated preview: \(error)\n", stderr)
+        return 1
+    }
+
+    return 0
+}
+
 func renderNeuralPreview(connectome: Connectome, path: String) -> Int32 {
     _ = NSApplication.shared
     let engine = NeuralEngine(connectome: connectome)
@@ -359,6 +436,13 @@ do {
     if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-edge-preview"),
        CommandLine.arguments.indices.contains(previewIndex + 1) {
         exit(renderPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1], edgeFold: true))
+    }
+    if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-animated-preview"),
+       CommandLine.arguments.indices.contains(previewIndex + 1) {
+        exit(renderAnimatedPreviewFrames(
+            connectome: connectome,
+            directory: CommandLine.arguments[previewIndex + 1]
+        ))
     }
     if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-neural-preview"),
        CommandLine.arguments.indices.contains(previewIndex + 1) {
