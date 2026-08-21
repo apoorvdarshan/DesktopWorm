@@ -8,6 +8,13 @@ private struct ActivitySample {
     let arousal: Double
 }
 
+enum NeuralAnatomicalRegion: String, CaseIterable {
+    case anteriorComplex
+    case ventralCord
+    case bodySensory
+    case tailGanglia
+}
+
 final class NeuralMapView: NSView {
     let engine: NeuralEngine
     let world: WormWorld
@@ -21,7 +28,7 @@ final class NeuralMapView: NSView {
     init(frame: CGRect, engine: NeuralEngine, world: WormWorld) {
         self.engine = engine
         self.world = world
-        self.normalizedPositions = NeuralMapView.makeLayout(for: engine.connectome.neurons)
+        self.normalizedPositions = NeuralMapView.makeAnatomicalLayout(for: engine.connectome.neurons)
         self.displayEdges = Array(engine.connectome.edges.sorted { $0.weight > $1.weight }.prefix(1_400))
         super.init(frame: frame)
         appearance = NSAppearance(named: .darkAqua)
@@ -120,24 +127,10 @@ final class NeuralMapView: NSView {
 
     private func drawCompactGraph(in rect: CGRect, context: CGContext) {
         drawCard(rect)
-        drawText("FUNCTIONAL FLOW · NOT ANATOMICAL POSITION", at: CGPoint(x: rect.minX + 10, y: rect.maxY - 18), font: .monospacedSystemFont(ofSize: 6.8, weight: .semibold), color: NSColor.white.withAlphaComponent(0.38))
+        drawText("WORM NERVOUS SYSTEM · SCHEMATIC REGIONS", at: CGPoint(x: rect.minX + 10, y: rect.maxY - 18), font: .monospacedSystemFont(ofSize: 6.8, weight: .semibold), color: NSColor.white.withAlphaComponent(0.42))
 
-        let inner = CGRect(x: rect.minX + 9, y: rect.minY + 9, width: rect.width - 18, height: rect.height - 34)
-        let laneWidth = inner.width / 3
-        let colors: [NSColor] = [.systemCyan, .systemPurple, .systemOrange]
-        let titles = ["SENS", "INTER", "MOTOR"]
-        for index in 0..<3 {
-            let lane = CGRect(x: inner.minX + CGFloat(index) * laneWidth + 2, y: inner.minY, width: laneWidth - 4, height: inner.height)
-            let path = NSBezierPath(roundedRect: lane, xRadius: 7, yRadius: 7)
-            colors[index].withAlphaComponent(0.035).setFill()
-            path.fill()
-            colors[index].withAlphaComponent(0.09).setStroke()
-            path.lineWidth = 0.5
-            path.stroke()
-            drawText(titles[index], at: CGPoint(x: lane.minX + 5, y: lane.maxY - 13), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: colors[index].withAlphaComponent(0.68))
-        }
-
-        let nodeRect = CGRect(x: inner.minX + 3, y: inner.minY + 4, width: inner.width - 6, height: inner.height - 20)
+        let nodeRect = CGRect(x: rect.minX + 8, y: rect.minY + 7, width: rect.width - 16, height: rect.height - 30)
+        drawAnatomicalScaffold(in: nodeRect, compact: true)
         let points = normalizedPositions.map {
             CGPoint(x: nodeRect.minX + $0.x * nodeRect.width, y: nodeRect.minY + $0.y * nodeRect.height)
         }
@@ -229,50 +222,96 @@ final class NeuralMapView: NSView {
         x += drawPill("302 NEURONS", at: CGPoint(x: x, y: bounds.maxY - 106), color: .systemCyan) + 8
         x += drawPill("5,806 NEURAL EDGES", at: CGPoint(x: x, y: bounds.maxY - 106), color: .systemPurple) + 8
         x += drawPill("DYNAMICS · MODELED", at: CGPoint(x: x, y: bounds.maxY - 106), color: .systemOrange) + 8
-        _ = drawPill("LAYOUT · FUNCTIONAL", at: CGPoint(x: x, y: bounds.maxY - 106), color: .systemBlue)
+        _ = drawPill("LAYOUT · ANATOMY SCHEMATIC", at: CGPoint(x: x, y: bounds.maxY - 106), color: .systemBlue)
     }
 
     private func drawGraph(in rect: CGRect, context: CGContext) {
         drawCard(rect)
         drawText(
-            "CONNECTOME ACTIVITY FLOW",
+            "WHOLE-WORM NERVOUS SYSTEM",
             at: CGPoint(x: rect.minX + 17, y: rect.maxY - 28),
             font: .monospacedSystemFont(ofSize: 11, weight: .semibold),
             color: NSColor.white.withAlphaComponent(0.72)
         )
         drawText(
-            "functional grouping · node position is not anatomical location",
+            "region- and class-derived schematic · not measured cell coordinates",
             at: CGPoint(x: rect.minX + 17, y: rect.maxY - 46),
             font: .systemFont(ofSize: 9.5, weight: .regular),
             color: NSColor.white.withAlphaComponent(0.36)
         )
 
-        let inner = CGRect(x: rect.minX + 16, y: rect.minY + 18, width: rect.width - 32, height: rect.height - 78)
-        let laneWidth = inner.width / 3
-        let laneColors: [NSColor] = [.systemCyan, .systemPurple, .systemOrange]
-        let laneTitles = ["SENSORY", "INTERNEURONS", "MOTOR"]
-        for index in 0..<3 {
-            let lane = CGRect(x: inner.minX + CGFloat(index) * laneWidth + 3, y: inner.minY, width: laneWidth - 6, height: inner.height)
-            let path = NSBezierPath(roundedRect: lane, xRadius: 11, yRadius: 11)
-            laneColors[index].withAlphaComponent(0.035).setFill()
-            path.fill()
-            laneColors[index].withAlphaComponent(0.10).setStroke()
-            path.lineWidth = 0.7
-            path.stroke()
-            drawText(
-                laneTitles[index],
-                at: CGPoint(x: lane.midX - 34, y: lane.maxY - 20),
-                font: .monospacedSystemFont(ofSize: 9.5, weight: .semibold),
-                color: laneColors[index].withAlphaComponent(0.72)
-            )
-        }
-
-        let nodeRect = CGRect(x: inner.minX + 5, y: inner.minY + 9, width: inner.width - 10, height: inner.height - 42)
+        let nodeRect = CGRect(x: rect.minX + 15, y: rect.minY + 17, width: rect.width - 30, height: rect.height - 79)
+        drawAnatomicalScaffold(in: nodeRect, compact: false)
         let points = normalizedPositions.map {
             CGPoint(x: nodeRect.minX + $0.x * nodeRect.width, y: nodeRect.minY + $0.y * nodeRect.height)
         }
         drawEdges(points: points, context: context)
         drawNodes(points: points, context: context)
+    }
+
+    private func drawAnatomicalScaffold(in rect: CGRect, compact: Bool) {
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height)
+        }
+
+        let body = NSBezierPath()
+        body.move(to: point(0.015, 0.50))
+        body.curve(to: point(0.16, 0.84), controlPoint1: point(0.055, 0.72), controlPoint2: point(0.105, 0.86))
+        body.curve(to: point(0.62, 0.70), controlPoint1: point(0.31, 0.77), controlPoint2: point(0.48, 0.71))
+        body.curve(to: point(0.985, 0.52), controlPoint1: point(0.78, 0.69), controlPoint2: point(0.93, 0.60))
+        body.curve(to: point(0.62, 0.30), controlPoint1: point(0.93, 0.43), controlPoint2: point(0.78, 0.31))
+        body.curve(to: point(0.16, 0.16), controlPoint1: point(0.48, 0.29), controlPoint2: point(0.31, 0.23))
+        body.curve(to: point(0.015, 0.50), controlPoint1: point(0.105, 0.14), controlPoint2: point(0.055, 0.28))
+        body.close()
+        NSColor.systemMint.withAlphaComponent(compact ? 0.035 : 0.045).setFill()
+        body.fill()
+        NSColor.systemMint.withAlphaComponent(compact ? 0.12 : 0.16).setStroke()
+        body.lineWidth = compact ? 0.55 : 0.8
+        body.stroke()
+
+        let ringRect = CGRect(
+            x: point(0.22, 0.54).x - rect.width * 0.07,
+            y: point(0.22, 0.54).y - rect.height * 0.29,
+            width: rect.width * 0.14,
+            height: rect.height * 0.58
+        )
+        let ring = NSBezierPath(ovalIn: ringRect)
+        NSColor.systemPurple.withAlphaComponent(compact ? 0.055 : 0.075).setFill()
+        ring.fill()
+        NSColor.systemPurple.withAlphaComponent(compact ? 0.32 : 0.40).setStroke()
+        ring.lineWidth = compact ? 1.0 : 1.5
+        ring.stroke()
+
+        let dorsal = NSBezierPath()
+        dorsal.move(to: point(0.28, 0.66))
+        dorsal.curve(to: point(0.95, 0.57), controlPoint1: point(0.52, 0.67), controlPoint2: point(0.78, 0.66))
+        NSColor.systemCyan.withAlphaComponent(compact ? 0.16 : 0.22).setStroke()
+        dorsal.lineWidth = compact ? 0.55 : 0.85
+        dorsal.stroke()
+
+        let ventral = NSBezierPath()
+        ventral.move(to: point(0.25, 0.31))
+        ventral.curve(to: point(0.96, 0.46), controlPoint1: point(0.49, 0.26), controlPoint2: point(0.79, 0.29))
+        NSColor.systemOrange.withAlphaComponent(compact ? 0.28 : 0.36).setStroke()
+        ventral.lineWidth = compact ? 1.0 : 1.5
+        ventral.stroke()
+
+        let tail = NSBezierPath(ovalIn: CGRect(
+            x: point(0.91, 0.50).x - rect.width * 0.045,
+            y: point(0.91, 0.50).y - rect.height * 0.17,
+            width: rect.width * 0.09,
+            height: rect.height * 0.34
+        ))
+        NSColor.systemBlue.withAlphaComponent(compact ? 0.05 : 0.07).setFill()
+        tail.fill()
+        NSColor.systemBlue.withAlphaComponent(compact ? 0.22 : 0.30).setStroke()
+        tail.lineWidth = compact ? 0.6 : 0.9
+        tail.stroke()
+
+        let fontSize: CGFloat = compact ? 5.5 : 8.0
+        drawText("HEAD + NERVE RING", at: point(0.10, 0.88), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemPurple.withAlphaComponent(0.72))
+        drawText("VENTRAL NERVE CORD", at: point(0.43, 0.12), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemOrange.withAlphaComponent(0.65))
+        drawText("TAIL", at: point(0.89, 0.77), font: .monospacedSystemFont(ofSize: fontSize, weight: .semibold), color: NSColor.systemBlue.withAlphaComponent(0.65))
     }
 
     private func drawEdges(points: [CGPoint], context: CGContext, limit: Int = .max) {
@@ -489,28 +528,75 @@ final class NeuralMapView: NSView {
         }
     }
 
-    private static func makeLayout(for neurons: [Neuron]) -> [CGPoint] {
+    static func anatomicalRegion(for neuron: Neuron) -> NeuralAnatomicalRegion {
+        let id = neuron.id
+        let ventralCordClasses = ["AS", "DA", "DB", "DD", "VA", "VB", "VD", "VC"]
+        if ventralCordClasses.contains(where: { id.hasPrefix($0) && numericSuffix(of: id) != nil }) {
+            return .ventralCord
+        }
+
+        let bodySensoryPrefixes = ["ALM", "AVM", "PVM", "PVD", "PDE", "SDQ", "CAN", "HSN"]
+        if bodySensoryPrefixes.contains(where: id.hasPrefix) {
+            return .bodySensory
+        }
+
+        let tailPrefixes = ["PHA", "PHB", "PHC", "PLM", "PVC", "PVN", "PQR", "PVR", "PVT", "LUA", "DVA", "DVB", "DVC", "PDA", "PDB"]
+        if tailPrefixes.contains(where: id.hasPrefix) {
+            return .tailGanglia
+        }
+        return .anteriorComplex
+    }
+
+    static func makeAnatomicalLayout(for neurons: [Neuron]) -> [CGPoint] {
         var result = Array(repeating: CGPoint.zero, count: neurons.count)
-        for category in NeuronCategory.allCases {
-            let members = neurons.indices.filter { neurons[$0].category == category }
-            let centerX: CGFloat
-            let width: CGFloat
-            switch category {
-            case .sensory: centerX = 0.12; width = 0.17
-            case .interneuron: centerX = 0.50; width = 0.23
-            case .motor: centerX = 0.88; width = 0.17
-            }
-            let columns = max(4, Int(ceil(sqrt(Double(members.count)))))
-            let rows = Int(ceil(Double(members.count) / Double(columns)))
-            for (offset, index) in members.enumerated() {
-                let column = offset % columns
-                let row = offset / columns
-                let x = centerX + (CGFloat(column) / CGFloat(max(1, columns - 1)) - 0.5) * width
-                let baseY = 0.04 + CGFloat(row) / CGFloat(max(1, rows - 1)) * 0.90
-                let wave = sin(CGFloat(column) * 1.7 + CGFloat(row) * 0.45) * 0.008
-                result[index] = CGPoint(x: x, y: min(0.96, max(0.03, baseY + wave)))
-            }
+
+        let anteriorComplex = neurons.indices.filter { anatomicalRegion(for: neurons[$0]) == .anteriorComplex }
+        for (offset, index) in anteriorComplex.enumerated() {
+            let fraction = sqrt((CGFloat(offset) + 0.65) / CGFloat(max(1, anteriorComplex.count)))
+            let angle = CGFloat(offset) * 2.39996323
+            result[index] = CGPoint(x: 0.22 + cos(angle) * 0.13 * fraction, y: 0.54 + sin(angle) * 0.30 * fraction)
+        }
+
+        let cordLane: [String: CGFloat] = [
+            "AS": 0.21, "DA": 0.24, "DB": 0.27, "DD": 0.30,
+            "VA": 0.33, "VB": 0.36, "VD": 0.39, "VC": 0.43,
+        ]
+        let classMaximum: [String: Int] = [
+            "AS": 11, "DA": 9, "DB": 7, "DD": 6,
+            "VA": 12, "VB": 11, "VD": 13, "VC": 6,
+        ]
+        for index in neurons.indices where anatomicalRegion(for: neurons[index]) == .ventralCord {
+            let id = neurons[index].id
+            let neuronClass = cordLane.keys.first(where: id.hasPrefix) ?? "AS"
+            let number = numericSuffix(of: id) ?? 1
+            let maximum = classMaximum[neuronClass] ?? number
+            let fraction = CGFloat(number - 1) / CGFloat(max(1, maximum - 1))
+            result[index] = CGPoint(x: 0.30 + fraction * 0.59, y: (cordLane[neuronClass] ?? 0.30) + sin(fraction * .pi) * 0.015)
+        }
+
+        let bodyPositions: [String: CGFloat] = [
+            "ALM": 0.37, "SDQ": 0.45, "CAN": 0.51, "AVM": 0.55,
+            "HSN": 0.60, "PDE": 0.68, "PVD": 0.73, "PVM": 0.78,
+        ]
+        let bodySensory = neurons.indices.filter { anatomicalRegion(for: neurons[$0]) == .bodySensory }
+        for (offset, index) in bodySensory.enumerated() {
+            let id = neurons[index].id
+            let prefix = bodyPositions.keys.first(where: id.hasPrefix)
+            let x = prefix.flatMap { bodyPositions[$0] } ?? (0.38 + CGFloat(offset) * 0.025)
+            result[index] = CGPoint(x: x, y: offset.isMultiple(of: 2) ? 0.70 : 0.57)
+        }
+
+        let tailGanglia = neurons.indices.filter { anatomicalRegion(for: neurons[$0]) == .tailGanglia }
+        for (offset, index) in tailGanglia.enumerated() {
+            let fraction = sqrt((CGFloat(offset) + 0.55) / CGFloat(max(1, tailGanglia.count)))
+            let angle = CGFloat(offset) * 2.39996323
+            result[index] = CGPoint(x: 0.91 + cos(angle) * 0.045 * fraction, y: 0.50 + sin(angle) * 0.16 * fraction)
         }
         return result
+    }
+
+    private static func numericSuffix(of id: String) -> Int? {
+        let digits = id.reversed().prefix(while: { $0.isNumber }).reversed()
+        return digits.isEmpty ? nil : Int(String(digits))
     }
 }

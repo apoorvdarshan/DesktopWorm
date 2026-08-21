@@ -218,6 +218,19 @@ func runSelfTest(connectome: Connectome) -> Int32 {
         fputs("FAIL: Living Connectome history is not sampling activity\n", stderr)
         return 1
     }
+    let anatomicalLayout = NeuralMapView.makeAnatomicalLayout(for: connectome.neurons)
+    guard anatomicalLayout.count == 302,
+          anatomicalLayout.allSatisfy({ $0.x.isFinite && $0.y.isFinite && (0...1).contains($0.x) && (0...1).contains($0.y) }) else {
+        fputs("FAIL: nervous-system schematic did not place every neuron\n", stderr)
+        return 1
+    }
+    let regionCounts = Dictionary(grouping: connectome.neurons, by: NeuralMapView.anatomicalRegion(for:)).mapValues(\.count)
+    guard NeuralAnatomicalRegion.allCases.allSatisfy({ (regionCounts[$0] ?? 0) > 0 }),
+          (regionCounts[.anteriorComplex] ?? 0) > 150,
+          (regionCounts[.ventralCord] ?? 0) > 60 else {
+        fputs("FAIL: nervous-system schematic regions are unexpectedly sparse\n", stderr)
+        return 1
+    }
     let testDisplay = CGRect(x: 1_440, y: 24, width: 1_920, height: 1_056)
     let hudOrigin = AppDelegate.connectomeHUDOrigin(
         windowSize: NSSize(width: 520, height: 362),
@@ -240,6 +253,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
     print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")
     print("  Living Connectome history samples: \(neuralView.sampleCount)")
+    print("  schematic regions: head + nerve ring \(regionCounts[.anteriorComplex] ?? 0), ventral cord \(regionCounts[.ventralCord] ?? 0), body sensory \(regionCounts[.bodySensory] ?? 0), tail \(regionCounts[.tailGanglia] ?? 0)")
     print("  compact HUD placement: bottom-right on active display")
     return 0
 }

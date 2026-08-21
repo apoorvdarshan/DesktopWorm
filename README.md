@@ -26,13 +26,19 @@ then approaches the sampled position instead of being continuously dragged by
 the pointer.
 
 The Living Connectome opens as a compact 520 × 340 floating HUD in the
-bottom-right of the active display. It shows all 302 neurons in a clearly
-labeled functional-flow layout, activity-weighted connections, the most active
-cells, live forward/reverse command-interneuron drive, dorsal and ventral muscle
-activity, and the current autonomous behavior. Resize it larger to reveal the
-rolling history, transmitters and expanded scientific boundary. The layout says
-it is functional rather than anatomical, and badges distinguish OpenWorm data
-from modeled dynamics and behavior.
+bottom-right of the active display. It shows all 302 neurons inside a
+whole-worm nervous-system schematic: a dense head-ganglia and nerve-ring field, longitudinal
+cords, the numbered ventral-cord motor classes ordered along the body, body
+sensory cells and a posterior ganglia cluster. Activity-weighted connections,
+the most active cells, command-interneuron drive, dorsal and ventral muscle
+activity, and the current autonomous behavior remain live. Resize it larger to
+reveal the rolling history, transmitters and expanded scientific boundary.
+
+c302 does not provide measured per-neuron spatial coordinates in the compact
+source used here. The display therefore labels this as a region- and
+class-derived anatomy schematic; it does not claim that dot positions are
+microscopy coordinates. Colors still identify sensory, interneuron and motor
+roles, while edges and neuron identities remain c302-derived.
 
 ## Run
 
