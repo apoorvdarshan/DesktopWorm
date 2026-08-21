@@ -1,7 +1,23 @@
-# DesktopWorm 🪱
+<p align="center">
+  <img src="assets/desktop-worm.png" alt="DesktopWorm crawling across a macOS desktop" width="100%">
+</p>
 
-A native macOS desktop organism driven by the complete 302-neuron
-*Caenorhabditis elegans* hermaphrodite connectome from OpenWorm c302.
+<h1 align="center">DesktopWorm 🪱</h1>
+
+<p align="center">
+  <strong>A native macOS desktop <em>C. elegans</em> driven by the OpenWorm c302 connectome.</strong>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/IuXMyePoKhs"><strong>Watch the 41-second demo</strong></a>
+  ·
+  <a href="https://github.com/openworm/c302">OpenWorm c302</a>
+  ·
+  <a href="CREDITS.md">Scientific credits</a>
+</p>
+
+DesktopWorm uses the complete 302-neuron *Caenorhabditis elegans*
+hermaphrodite connectome from OpenWorm c302.
 
 DesktopWorm crawls across the desktop, samples a deliberately slow-moving
 cursor as a weak chemical attractant, reverses after fast nearby cursor
@@ -14,6 +30,8 @@ connectome activity window. The model includes:
 - 926 neuron-to-muscle edges;
 - chemical synapses and electrical gap junctions;
 - sensory, interneuron and motor-neuron activity visualization.
+
+## Behavior and rendering
 
 The desktop body is a translucent ivory/amber rendering with a tapered head
 and tail, subtle pharynx and intestine, and fine cuticle rings. Its articulated
@@ -32,6 +50,16 @@ then approaches the sampled position instead of being continuously dragged by
 the pointer. A stationary pointer is not repeatedly interpreted as food, and
 even dwelling retains slow body-wave-driven travel rather than becoming an
 extended freeze.
+
+## Living Connectome
+
+<p align="center">
+  <img src="assets/living-connectome.png" alt="DesktopWorm Living Connectome window showing all 302 neurons and modeled activity" width="820">
+</p>
+
+<p align="center">
+  <sub>All 302 neuron identities and c302-derived connections are shown in a region- and class-derived nervous-system schematic; activity and packet timing are modeled.</sub>
+</p>
 
 The Living Connectome opens as a compact 520 × 340 floating HUD in the
 bottom-right of the active display. It shows all 302 neurons inside a
