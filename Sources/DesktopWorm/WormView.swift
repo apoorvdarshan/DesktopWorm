@@ -109,20 +109,25 @@ final class WormWorld {
             triggerTouch(engine: engine)
         }
 
+        let cursorOffersSignal = mouseVelocity >= 10 && mouseVelocity <= 260
         if behavior == .sensoryPause, chemotaxisTarget == nil {
             beginChemotaxis(toward: mouse)
-        } else if behavior == .forwardCrawl,
+        } else if (behavior == .forwardCrawl || behavior == .roaming),
                   cursorEngagementCooldown <= 0,
+                  cursorOffersSignal,
                   distanceToMouse > 115,
                   distanceToMouse < 470,
-                  mouseVelocity < 850 {
+                  mouseVelocity < 260 {
             beginChemotaxis(toward: mouse)
-            enter(.sensoryPause, for: 0.36)
-            cursorEngagementCooldown = 4.8
+            enter(.sensoryPause, for: 0.24)
+            cursorEngagementCooldown = 6.5
         }
 
         foodPulseClock -= dt
-        if distanceToMouse > 130, distanceToMouse < 600, foodPulseClock <= 0 {
+        if cursorOffersSignal,
+           distanceToMouse > 130,
+           distanceToMouse < 600,
+           foodPulseClock <= 0 {
             engine.stimulateFood(0.30)
             foodPulseClock = 0.22
         }
@@ -133,7 +138,7 @@ final class WormWorld {
         let imbalance = lastMotor.dorsalMuscle - lastMotor.ventralMuscle
         let neuralBend = min(0.11, abs(imbalance) * 0.22)
         let locomotorDrive = profile.travelDirection < 0 ? lastMotor.reverse : lastMotor.forward
-        let neuralGain = clamped(0.72 + locomotorDrive * 2.0, 0.72, 1.25)
+        let neuralGain = clamped(0.86 + locomotorDrive * 2.35, 0.86, 1.42)
         let targetAmplitude = profile.amplitude * neuralGain * (1 + lastMotor.arousal * 0.8) + neuralBend
         let targetFrequency = profile.frequency * (0.84 + locomotorDrive * 0.9 + lastMotor.arousal * 0.7)
         let gaitBlend = 1 - exp(-dt * 4.6)
@@ -159,7 +164,7 @@ final class WormWorld {
         let wavePower = clamped(gaitAmplitude * gaitFrequency / 0.56, 0, 1)
         let strokeTraction = 0.34 + 0.66 * pow(abs(cos(phase - 0.35)), 0.72)
         let targetSpeed = gaitTravelDirection * speedScale * profile.maxSpeed * wavePower * strokeTraction
-        speed += (targetSpeed - speed) * min(1, dt * 3.9)
+        speed += (targetSpeed - speed) * min(1, dt * 5.2)
         let lateralVelocity = sin(phase) * gaitAmplitude * (3.8 + headSweepGain * 9.5)
         let tangentX = cos(heading)
         let tangentY = sin(heading)
@@ -275,17 +280,17 @@ final class WormWorld {
             return
         }
 
-        if behavior == .forwardCrawl, spontaneousClock > 3.4 {
+        if behavior == .forwardCrawl, spontaneousClock > 6.8 {
             spontaneousClock = 0
             turnDirection *= -1
             let repertoire: [(WormBehavior, Double)] = [
-                (.headSweep, 1.30),
-                (.roaming, 2.55),
-                (.shallowTurn, 1.00),
-                (.localSearch, 2.45),
-                (.dwelling, 1.85),
-                (.pirouette, 2.45),
-                (.deepTurn, 1.15),
+                (.roaming, 4.80),
+                (.headSweep, 0.76),
+                (.shallowTurn, 0.72),
+                (.localSearch, 1.35),
+                (.pirouette, 1.90),
+                (.deepTurn, 0.82),
+                (.dwelling, 0.74),
             ]
             let next = repertoire[spontaneousIndex % repertoire.count]
             spontaneousIndex += 1
@@ -304,12 +309,12 @@ final class WormWorld {
     ) {
         switch behavior {
         case .forwardCrawl:
-            return (1, 1, 0.40, 1.18, 43, 0.09 * sin(behaviorClock * 0.55), 0)
+            return (1, 1, 0.42, 1.28, 72, 0.07 * sin(behaviorClock * 0.55), 0)
         case .roaming:
-            return (1, 1, 0.37, 1.38, 52, 0.12 * sin(behaviorClock * 0.74), 0)
+            return (1, 1, 0.39, 1.42, 88, 0.10 * sin(behaviorClock * 0.74), 0)
         case .localSearch:
             let alternatingTurn = sin(behaviorClock * 1.8) >= 0 ? 1.0 : -1.0
-            return (0.30, 1, 0.52, 0.82, 29, alternatingTurn * 0.88, alternatingTurn * 0.30)
+            return (0.58, 1, 0.52, 0.88, 48, alternatingTurn * 0.82, alternatingTurn * 0.30)
         case .pirouette:
             if behaviorClock < 0.78 {
                 return (-0.72, -1, 0.50, 1.42, 46, turnDirection * 0.18, 0)
@@ -323,20 +328,20 @@ final class WormWorld {
         case .sensoryPause:
             return (0, 1, 0.09, 0.34, 0, 0, 0)
         case .headSweep:
-            return (0.04, 1, 0.39, 0.58, 20, turnDirection * 1.08 * sin(behaviorClock * 4.8), 0)
+            return (0.30, 1, 0.39, 0.64, 40, turnDirection * 1.08 * sin(behaviorClock * 4.8), 0)
         case .shallowTurn:
-            return (0.22, 1, 0.46, 0.88, 30, turnDirection * 0.72, turnDirection * 0.22)
+            return (0.52, 1, 0.46, 0.94, 56, turnDirection * 0.72, turnDirection * 0.22)
         case .deepTurn:
-            return (0.10, 1, 0.56, 0.78, 25, turnDirection * 1.58, turnDirection * 0.62)
+            return (0.32, 1, 0.56, 0.84, 48, turnDirection * 1.58, turnDirection * 0.62)
         case .approachCrawl:
             let target = chemotaxisTarget ?? head
             let desired = atan2(target.y - head.y, target.x - head.x)
             let error = wrappedAngle(desired - heading)
-            return (0.68, 1, 0.43, 1.02, 34, clamped(error * 0.42, -0.32, 0.32), clamped(error * 0.08, -0.10, 0.10))
+            return (0.82, 1, 0.43, 1.08, 60, clamped(error * 0.42, -0.32, 0.32), clamped(error * 0.08, -0.10, 0.10))
         case .dwelling:
-            return (0.02, 1, 0.20, 0.38, 14, 0.22 * sin(behaviorClock * 5.1), 0)
+            return (0.18, 1, 0.24, 0.48, 32, 0.22 * sin(behaviorClock * 5.1), 0)
         case .omegaTurn:
-            return (0.24, 1, 0.58, 0.94, 30, turnDirection * 2.15, turnDirection * 0.78)
+            return (0.42, 1, 0.58, 1.00, 48, turnDirection * 2.15, turnDirection * 0.78)
         case .collisionRecovery:
             return (-0.64, -1, 0.49, 1.38, 44, turnDirection * 0.55, 0)
         case .paused:

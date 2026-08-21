@@ -160,6 +160,38 @@ func runSelfTest(connectome: Connectome) -> Int32 {
         return 1
     }
 
+    // A stationary pointer must not repeatedly trap autonomous locomotion in
+    // the chemotaxis pause/approach cycle. Sustained runs should cover desktop
+    // distance while their speed remains coupled to the articulated gait.
+    let roamingWorld = WormWorld()
+    roamingWorld.place(at: CGPoint(x: 2_000, y: 1_500))
+    let roamingBounds = CGRect(x: 0, y: 0, width: 4_000, height: 3_000)
+    let stationaryCursor = CGPoint(x: 2_300, y: 1_500)
+    var roamingPathLength = 0.0
+    var previousRoamingHead = roamingWorld.head
+    var cursorInducedStop = false
+    for _ in 0..<720 {
+        engine.step(dt: 1.0 / 60.0)
+        roamingWorld.update(
+            dt: 1.0 / 60.0,
+            bounds: roamingBounds,
+            engine: engine,
+            mouse: stationaryCursor
+        )
+        roamingPathLength += hypot(
+            roamingWorld.head.x - previousRoamingHead.x,
+            roamingWorld.head.y - previousRoamingHead.y
+        )
+        previousRoamingHead = roamingWorld.head
+        cursorInducedStop = cursorInducedStop
+            || roamingWorld.behavior == .sensoryPause
+            || roamingWorld.behavior == .approachCrawl
+    }
+    guard roamingPathLength > 350, !cursorInducedStop else {
+        fputs("FAIL: autonomous roaming stalled beside a stationary cursor\n", stderr)
+        return 1
+    }
+
     let edgeWorld = WormWorld()
     edgeWorld.place(at: CGPoint(x: 600, y: 650), heading: -.pi / 2)
     for _ in 0..<12 {
@@ -220,7 +252,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     let largeBounds = CGRect(x: 0, y: 0, width: 4_000, height: 3_000)
     let farMouse = CGPoint(x: 3_900, y: 2_900)
     var spontaneousBehaviors: Set<WormBehavior> = []
-    for _ in 0..<1_260 {
+    for _ in 0..<1_800 {
         engine.step(dt: 1.0 / 30.0)
         spontaneousWorld.update(
             dt: 1.0 / 30.0,
@@ -297,6 +329,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print(String(format: "  DVA proprioceptive response: %.3f → %.3f", baselineDVA, proprioceptiveDVA))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
     print(String(format: "  articulated body wave energy: %.4f rad/segment", world.bodyWaveEnergy()))
+    print(String(format: "  12-second autonomous path: %.1f px", roamingPathLength))
     print(String(format: "  minimum edge-fold clearance: %.2f px", edgeWorld.minimumEdgeClearance(in: simulationBounds)))
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
     print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")

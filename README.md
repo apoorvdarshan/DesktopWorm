@@ -3,8 +3,9 @@
 A native macOS desktop organism driven by the complete 302-neuron
 *Caenorhabditis elegans* hermaphrodite connectome from OpenWorm c302.
 
-DesktopWorm crawls across the desktop, treats the cursor as a weak chemical
-attractant, reverses after fast nearby cursor movement, and exposes a live
+DesktopWorm crawls across the desktop, samples a deliberately slow-moving
+cursor as a weak chemical attractant, reverses after fast nearby cursor
+movement, and exposes a live
 connectome activity window. The model includes:
 
 - all 302 neurons;
@@ -22,12 +23,15 @@ smooth gait transitions, so translation remains visibly coupled to bending.
 Every body segment also participates in screen-boundary constraints: trailing
 segments reflect inward and form a fold along an edge rather than being clipped
 outside the desktop overlay.
-The behavior controller supports forward crawling, touch-driven
+The behavior controller favors sustained forward roaming, as observed during
+off-food exploration, while retaining touch-driven
 reversal, sensory pauses, exploratory head sweeps, shallow turns, deep turns,
 slow approaches, dwelling, omega turns, collision recovery and pause. Cursor
 chemotaxis is staged: the worm samples a target, visibly reorients its body,
 then approaches the sampled position instead of being continuously dragged by
-the pointer.
+the pointer. A stationary pointer is not repeatedly interpreted as food, and
+even dwelling retains slow body-wave-driven travel rather than becoming an
+extended freeze.
 
 The Living Connectome opens as a compact 520 × 340 floating HUD in the
 bottom-right of the active display. It shows all 302 neurons inside a
