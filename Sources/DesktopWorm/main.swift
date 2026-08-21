@@ -46,6 +46,41 @@ func renderPreview(connectome: Connectome, path: String) -> Int32 {
     }
 }
 
+func renderMovementLabPreview(connectome: Connectome, path: String) -> Int32 {
+    _ = NSApplication.shared
+    let engine = NeuralEngine(connectome: connectome)
+    for _ in 0..<240 { engine.step(dt: 1.0 / 60.0) }
+
+    let controller = MovementLabController()
+    controller.update(
+        behavior: .localSearch,
+        motor: engine.motorState(),
+        active: engine.strongestActiveNeurons(limit: 5)
+    )
+    guard let view = controller.panel.contentView else {
+        fputs("FAIL: Movement Lab has no content view\n", stderr)
+        return 1
+    }
+    view.layoutSubtreeIfNeeded()
+    guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+        fputs("FAIL: could not create Movement Lab bitmap\n", stderr)
+        return 1
+    }
+    view.cacheDisplay(in: view.bounds, to: bitmap)
+    guard let png = bitmap.representation(using: .png, properties: [:]) else {
+        fputs("FAIL: could not encode Movement Lab preview\n", stderr)
+        return 1
+    }
+    do {
+        try png.write(to: URL(fileURLWithPath: path), options: .atomic)
+        print("PASS: Movement Lab rendered to \(path)")
+        return 0
+    } catch {
+        fputs("FAIL: could not write Movement Lab preview: \(error)\n", stderr)
+        return 1
+    }
+}
+
 func runSelfTest(connectome: Connectome) -> Int32 {
     guard connectome.neurons.count == 302 else {
         fputs("FAIL: expected 302 neurons, found \(connectome.neurons.count)\n", stderr)
@@ -142,6 +177,65 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
     world.setPaused(false)
 
+    var demonstratedBehaviors: Set<WormBehavior> = []
+    for motion in MotionShowcase.allCases {
+        let demoWorld = WormWorld()
+        demoWorld.demonstrate(
+            motion,
+            engine: engine,
+            target: CGPoint(x: 760, y: 560)
+        )
+        demonstratedBehaviors.insert(demoWorld.behavior)
+        for _ in 0..<45 {
+            engine.step(dt: 1.0 / 60.0)
+            demoWorld.update(
+                dt: 1.0 / 60.0,
+                bounds: simulationBounds,
+                engine: engine,
+                mouse: quietMouse
+            )
+        }
+        guard demoWorld.maximumSegmentError() < 0.001 else {
+            fputs("FAIL: movement showcase destabilized body constraints\n", stderr)
+            return 1
+        }
+    }
+    guard demonstratedBehaviors.count >= 9 else {
+        fputs("FAIL: movement showcase does not expose enough distinct behaviors\n", stderr)
+        return 1
+    }
+
+    let spontaneousWorld = WormWorld()
+    spontaneousWorld.place(at: CGPoint(x: 2_000, y: 1_500))
+    let largeBounds = CGRect(x: 0, y: 0, width: 4_000, height: 3_000)
+    let farMouse = CGPoint(x: 3_900, y: 2_900)
+    var spontaneousBehaviors: Set<WormBehavior> = []
+    for _ in 0..<1_260 {
+        engine.step(dt: 1.0 / 30.0)
+        spontaneousWorld.update(
+            dt: 1.0 / 30.0,
+            bounds: largeBounds,
+            engine: engine,
+            mouse: farMouse
+        )
+        spontaneousBehaviors.insert(spontaneousWorld.behavior)
+    }
+    let expectedSpontaneous: Set<WormBehavior> = [
+        .headSweep, .shallowTurn, .roaming, .localSearch, .dwelling, .pirouette, .deepTurn,
+    ]
+    guard expectedSpontaneous.isSubset(of: spontaneousBehaviors) else {
+        fputs("FAIL: spontaneous controller did not rotate through the full repertoire\n", stderr)
+        return 1
+    }
+
+    _ = NSApplication.shared
+    let movementLab = MovementLabController()
+    guard movementLab.motionButtonCount == MotionShowcase.allCases.count,
+          movementLab.panel.contentView != nil else {
+        fputs("FAIL: Movement Lab UI is incomplete\n", stderr)
+        return 1
+    }
+
     print("PASS: OpenWorm graph loaded")
     print("  neurons: \(connectome.neurons.count)")
     print("  neural edges: \(connectome.edges.count)")
@@ -151,6 +245,9 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print(String(format: "  post-touch forward/reverse: %.3f / %.3f", touched.forward, touched.reverse))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
+    print("  movement demonstrations: \(MotionShowcase.allCases.count)")
+    print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")
+    print("  Movement Lab controls: \(movementLab.motionButtonCount)")
     return 0
 }
 
@@ -162,6 +259,10 @@ do {
     if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-preview"),
        CommandLine.arguments.indices.contains(previewIndex + 1) {
         exit(renderPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1]))
+    }
+    if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-lab-preview"),
+       CommandLine.arguments.indices.contains(previewIndex + 1) {
+        exit(renderMovementLabPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1]))
     }
 
     let app = NSApplication.shared

@@ -25,6 +25,13 @@ chemotaxis is staged: the worm samples a target, visibly reorients its body,
 then approaches the sampled position instead of being continuously dragged by
 the pointer.
 
+The Movement Lab opens at launch and provides direct demonstrations of roaming,
+dwelling, head foraging, local search, reversal, shallow and deep turns, omega
+turns, pirouettes, chemotaxis and touch escape. It also shows live forward and
+reverse command-interneuron drive, dorsal and ventral muscle activity, mean
+network activity and the most active neurons. Scientific badges distinguish
+OpenWorm-derived anatomy from modeled neural dynamics and body mechanics.
+
 ## Run
 
 Requirements: macOS 13+ and Xcode Command Line Tools.
@@ -33,8 +40,9 @@ Requirements: macOS 13+ and Xcode Command Line Tools.
 ./script/build_and_run.sh
 ```
 
-Use the 🪱 menu-bar item to show the neural map, inject touch or food stimuli,
-choose the crawl speed, hide or show internal anatomy, pause, reset or quit.
+Use the Movement Lab or the 🪱 menu-bar item to demonstrate movement, show the
+neural map, inject touch or food stimuli, choose the crawl speed, hide or show
+internal anatomy, pause, reset or quit.
 The app does not request Accessibility, keyboard, camera, microphone or network
 permissions.
 

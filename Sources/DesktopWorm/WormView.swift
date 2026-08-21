@@ -2,6 +2,9 @@ import AppKit
 
 enum WormBehavior: String, Hashable {
     case forwardCrawl = "Forward crawl"
+    case roaming = "Roaming"
+    case localSearch = "Local search"
+    case pirouette = "Pirouette"
     case reverseEscape = "Touch reverse"
     case sensoryPause = "Sensing cursor"
     case headSweep = "Head sweep"
@@ -12,6 +15,52 @@ enum WormBehavior: String, Hashable {
     case omegaTurn = "Omega turn"
     case collisionRecovery = "Collision recovery"
     case paused = "Paused"
+}
+
+enum MotionShowcase: String, CaseIterable {
+    case roam
+    case dwell
+    case headForage
+    case localSearch
+    case reverse
+    case shallowTurn
+    case deepTurn
+    case omegaTurn
+    case pirouette
+    case chemotaxis
+    case touchEscape
+
+    var title: String {
+        switch self {
+        case .roam: return "Roam"
+        case .dwell: return "Dwell"
+        case .headForage: return "Head forage"
+        case .localSearch: return "Local search"
+        case .reverse: return "Reverse"
+        case .shallowTurn: return "Shallow turn"
+        case .deepTurn: return "Deep turn"
+        case .omegaTurn: return "Omega turn"
+        case .pirouette: return "Pirouette"
+        case .chemotaxis: return "Chemotaxis"
+        case .touchEscape: return "Touch escape"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .roam: return "Sustained faster crawl with broad undulations"
+        case .dwell: return "Low-speed movement with small local bends"
+        case .headForage: return "Nearly stationary exploratory head casting"
+        case .localSearch: return "High-turning search near the current location"
+        case .reverse: return "Backward locomotion with a tail-to-head wave"
+        case .shallowTurn: return "Gradual curved trajectory"
+        case .deepTurn: return "Strong whole-body reorientation"
+        case .omegaTurn: return "Tight omega-shaped turn"
+        case .pirouette: return "Reverse, tight turn, then forward recovery"
+        case .chemotaxis: return "Sample the cursor, orient, then approach"
+        case .touchEscape: return "Inject touch input and run an escape sequence"
+        }
+    }
 }
 
 final class WormWorld {
@@ -41,6 +90,7 @@ final class WormWorld {
     private var chemotaxisTarget: CGPoint?
     private var targetNeedsDeepTurn = false
     private var pausedBehavior: WormBehavior?
+    private var spontaneousIndex = 0
 
     init() {
         rebuildBody()
@@ -64,6 +114,40 @@ final class WormWorld {
         chemotaxisTarget = nil
         cursorEngagementCooldown = 5.5
         enter(.sensoryPause, for: 0.36)
+    }
+
+    func demonstrate(_ motion: MotionShowcase, engine: NeuralEngine, target: CGPoint? = nil) {
+        chemotaxisTarget = nil
+        cursorEngagementCooldown = 6.0
+        turnDirection *= -1
+
+        switch motion {
+        case .roam:
+            enter(.roaming, for: 4.0)
+        case .dwell:
+            enter(.dwelling, for: 3.5)
+        case .headForage:
+            engine.stimulateFood(0.55)
+            enter(.headSweep, for: 2.6)
+        case .localSearch:
+            enter(.localSearch, for: 3.8)
+        case .reverse:
+            enter(.reverseEscape, for: 1.45)
+        case .shallowTurn:
+            enter(.shallowTurn, for: 1.5)
+        case .deepTurn:
+            enter(.deepTurn, for: 1.45)
+        case .omegaTurn:
+            enter(.omegaTurn, for: 1.25)
+        case .pirouette:
+            enter(.pirouette, for: 3.0)
+        case .chemotaxis:
+            engine.stimulateFood(1.2)
+            beginChemotaxis(toward: target ?? head)
+            enter(.sensoryPause, for: 0.36)
+        case .touchEscape:
+            triggerTouch(engine: engine)
+        }
     }
 
     func setPaused(_ paused: Bool) {
@@ -217,7 +301,18 @@ final class WormWorld {
         if behavior == .forwardCrawl, spontaneousClock > 5.2 {
             spontaneousClock = 0
             turnDirection *= -1
-            enter(.headSweep, for: 1.45)
+            let repertoire: [(WormBehavior, Double)] = [
+                (.headSweep, 1.55),
+                (.roaming, 3.4),
+                (.shallowTurn, 1.25),
+                (.localSearch, 3.0),
+                (.dwelling, 2.4),
+                (.pirouette, 3.0),
+                (.deepTurn, 1.4),
+            ]
+            let next = repertoire[spontaneousIndex % repertoire.count]
+            spontaneousIndex += 1
+            enter(next.0, for: next.1)
         }
     }
 
@@ -233,6 +328,19 @@ final class WormWorld {
         switch behavior {
         case .forwardCrawl:
             return (1, 1, 0.40, 1.18, 43, 0.09 * sin(behaviorClock * 0.55), 0)
+        case .roaming:
+            return (1, 1, 0.37, 1.38, 52, 0.12 * sin(behaviorClock * 0.74), 0)
+        case .localSearch:
+            let alternatingTurn = sin(behaviorClock * 1.8) >= 0 ? 1.0 : -1.0
+            return (0.30, 1, 0.52, 0.82, 29, alternatingTurn * 0.88, alternatingTurn * 0.30)
+        case .pirouette:
+            if behaviorClock < 0.78 {
+                return (-0.72, -1, 0.50, 1.42, 46, turnDirection * 0.18, 0)
+            } else if behaviorClock < 1.92 {
+                return (0.10, 1, 0.62, 0.88, 25, turnDirection * 2.05, turnDirection * 0.82)
+            } else {
+                return (0.74, 1, 0.45, 1.20, 40, -turnDirection * 0.20, 0)
+            }
         case .reverseEscape:
             return (-1, -1, 0.47, 1.48, 48, turnDirection * 0.18, 0)
         case .sensoryPause:
