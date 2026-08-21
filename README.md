@@ -25,12 +25,12 @@ chemotaxis is staged: the worm samples a target, visibly reorients its body,
 then approaches the sampled position instead of being continuously dragged by
 the pointer.
 
-The Movement Lab opens at launch and provides direct demonstrations of roaming,
-dwelling, head foraging, local search, reversal, shallow and deep turns, omega
-turns, pirouettes, chemotaxis and touch escape. It also shows live forward and
-reverse command-interneuron drive, dorsal and ventral muscle activity, mean
-network activity and the most active neurons. Scientific badges distinguish
-OpenWorm-derived anatomy from modeled neural dynamics and body mechanics.
+The Living Connectome window opens at launch. It shows all 302 neurons in a
+clearly labeled functional-flow layout, activity-weighted connections, the most
+active cells and transmitters, live forward/reverse command-interneuron drive,
+dorsal and ventral muscle activity, and a rolling motor-circuit history. The
+layout explicitly says it is functional rather than anatomical, and scientific
+badges distinguish OpenWorm-derived anatomy from modeled dynamics and behavior.
 
 ## Run
 
@@ -40,9 +40,9 @@ Requirements: macOS 13+ and Xcode Command Line Tools.
 ./script/build_and_run.sh
 ```
 
-Use the Movement Lab or the 🪱 menu-bar item to demonstrate movement, show the
-neural map, inject touch or food stimuli, choose the crawl speed, hide or show
-internal anatomy, pause, reset or quit.
+The Living Connectome is the app's only control window. Use the 🪱 menu-bar item
+to reopen it, inject touch or food stimuli, choose the crawl speed, hide or show
+internal anatomy, pause, reset or quit. Movement selection remains autonomous.
 The app does not request Accessibility, keyboard, camera, microphone or network
 permissions.
 

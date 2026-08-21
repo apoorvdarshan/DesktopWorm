@@ -17,52 +17,6 @@ enum WormBehavior: String, Hashable {
     case paused = "Paused"
 }
 
-enum MotionShowcase: String, CaseIterable {
-    case roam
-    case dwell
-    case headForage
-    case localSearch
-    case reverse
-    case shallowTurn
-    case deepTurn
-    case omegaTurn
-    case pirouette
-    case chemotaxis
-    case touchEscape
-
-    var title: String {
-        switch self {
-        case .roam: return "Roam"
-        case .dwell: return "Dwell"
-        case .headForage: return "Head forage"
-        case .localSearch: return "Local search"
-        case .reverse: return "Reverse"
-        case .shallowTurn: return "Shallow turn"
-        case .deepTurn: return "Deep turn"
-        case .omegaTurn: return "Omega turn"
-        case .pirouette: return "Pirouette"
-        case .chemotaxis: return "Chemotaxis"
-        case .touchEscape: return "Touch escape"
-        }
-    }
-
-    var help: String {
-        switch self {
-        case .roam: return "Sustained faster crawl with broad undulations"
-        case .dwell: return "Low-speed movement with small local bends"
-        case .headForage: return "Nearly stationary exploratory head casting"
-        case .localSearch: return "High-turning search near the current location"
-        case .reverse: return "Backward locomotion with a tail-to-head wave"
-        case .shallowTurn: return "Gradual curved trajectory"
-        case .deepTurn: return "Strong whole-body reorientation"
-        case .omegaTurn: return "Tight omega-shaped turn"
-        case .pirouette: return "Reverse, tight turn, then forward recovery"
-        case .chemotaxis: return "Sample the cursor, orient, then approach"
-        case .touchEscape: return "Inject touch input and run an escape sequence"
-        }
-    }
-}
-
 final class WormWorld {
     private static let pointCount = 40
     private static let segmentLength = 4.55
@@ -114,40 +68,6 @@ final class WormWorld {
         chemotaxisTarget = nil
         cursorEngagementCooldown = 5.5
         enter(.sensoryPause, for: 0.36)
-    }
-
-    func demonstrate(_ motion: MotionShowcase, engine: NeuralEngine, target: CGPoint? = nil) {
-        chemotaxisTarget = nil
-        cursorEngagementCooldown = 6.0
-        turnDirection *= -1
-
-        switch motion {
-        case .roam:
-            enter(.roaming, for: 4.0)
-        case .dwell:
-            enter(.dwelling, for: 3.5)
-        case .headForage:
-            engine.stimulateFood(0.55)
-            enter(.headSweep, for: 2.6)
-        case .localSearch:
-            enter(.localSearch, for: 3.8)
-        case .reverse:
-            enter(.reverseEscape, for: 1.45)
-        case .shallowTurn:
-            enter(.shallowTurn, for: 1.5)
-        case .deepTurn:
-            enter(.deepTurn, for: 1.45)
-        case .omegaTurn:
-            enter(.omegaTurn, for: 1.25)
-        case .pirouette:
-            enter(.pirouette, for: 3.0)
-        case .chemotaxis:
-            engine.stimulateFood(1.2)
-            beginChemotaxis(toward: target ?? head)
-            enter(.sensoryPause, for: 0.36)
-        case .touchEscape:
-            triggerTouch(engine: engine)
-        }
     }
 
     func setPaused(_ paused: Bool) {

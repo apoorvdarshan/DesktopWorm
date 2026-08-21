@@ -46,37 +46,41 @@ func renderPreview(connectome: Connectome, path: String) -> Int32 {
     }
 }
 
-func renderMovementLabPreview(connectome: Connectome, path: String) -> Int32 {
+func renderNeuralPreview(connectome: Connectome, path: String) -> Int32 {
     _ = NSApplication.shared
     let engine = NeuralEngine(connectome: connectome)
-    for _ in 0..<240 { engine.step(dt: 1.0 / 60.0) }
+    let world = WormWorld()
+    let size = CGSize(width: 1_100, height: 720)
+    let bounds = CGRect(origin: .zero, size: size)
+    world.place(at: CGPoint(x: 520, y: 380))
+    let view = NeuralMapView(frame: bounds, engine: engine, world: world)
+    for _ in 0..<360 {
+        engine.step(dt: 1.0 / 60.0)
+        world.update(
+            dt: 1.0 / 60.0,
+            bounds: bounds,
+            engine: engine,
+            mouse: CGPoint(x: 1_000, y: 650)
+        )
+        view.sample()
+    }
 
-    let controller = MovementLabController()
-    controller.update(
-        behavior: .localSearch,
-        motor: engine.motorState(),
-        active: engine.strongestActiveNeurons(limit: 5)
-    )
-    guard let view = controller.panel.contentView else {
-        fputs("FAIL: Movement Lab has no content view\n", stderr)
-        return 1
-    }
-    view.layoutSubtreeIfNeeded()
-    guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
-        fputs("FAIL: could not create Movement Lab bitmap\n", stderr)
-        return 1
-    }
-    view.cacheDisplay(in: view.bounds, to: bitmap)
-    guard let png = bitmap.representation(using: .png, properties: [:]) else {
-        fputs("FAIL: could not encode Movement Lab preview\n", stderr)
+    let image = NSImage(size: size)
+    image.lockFocus()
+    view.draw(bounds)
+    image.unlockFocus()
+    guard let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let png = bitmap.representation(using: .png, properties: [:]) else {
+        fputs("FAIL: could not encode Living Connectome preview\n", stderr)
         return 1
     }
     do {
         try png.write(to: URL(fileURLWithPath: path), options: .atomic)
-        print("PASS: Movement Lab rendered to \(path)")
+        print("PASS: Living Connectome rendered to \(path)")
         return 0
     } catch {
-        fputs("FAIL: could not write Movement Lab preview: \(error)\n", stderr)
+        fputs("FAIL: could not write Living Connectome preview: \(error)\n", stderr)
         return 1
     }
 }
@@ -177,34 +181,6 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
     world.setPaused(false)
 
-    var demonstratedBehaviors: Set<WormBehavior> = []
-    for motion in MotionShowcase.allCases {
-        let demoWorld = WormWorld()
-        demoWorld.demonstrate(
-            motion,
-            engine: engine,
-            target: CGPoint(x: 760, y: 560)
-        )
-        demonstratedBehaviors.insert(demoWorld.behavior)
-        for _ in 0..<45 {
-            engine.step(dt: 1.0 / 60.0)
-            demoWorld.update(
-                dt: 1.0 / 60.0,
-                bounds: simulationBounds,
-                engine: engine,
-                mouse: quietMouse
-            )
-        }
-        guard demoWorld.maximumSegmentError() < 0.001 else {
-            fputs("FAIL: movement showcase destabilized body constraints\n", stderr)
-            return 1
-        }
-    }
-    guard demonstratedBehaviors.count >= 9 else {
-        fputs("FAIL: movement showcase does not expose enough distinct behaviors\n", stderr)
-        return 1
-    }
-
     let spontaneousWorld = WormWorld()
     spontaneousWorld.place(at: CGPoint(x: 2_000, y: 1_500))
     let largeBounds = CGRect(x: 0, y: 0, width: 4_000, height: 3_000)
@@ -229,10 +205,17 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     }
 
     _ = NSApplication.shared
-    let movementLab = MovementLabController()
-    guard movementLab.motionButtonCount == MotionShowcase.allCases.count,
-          movementLab.panel.contentView != nil else {
-        fputs("FAIL: Movement Lab UI is incomplete\n", stderr)
+    let neuralView = NeuralMapView(
+        frame: CGRect(x: 0, y: 0, width: 1_100, height: 720),
+        engine: engine,
+        world: spontaneousWorld
+    )
+    for _ in 0..<12 {
+        engine.step(dt: 0.05)
+        neuralView.sample()
+    }
+    guard neuralView.sampleCount >= 10 else {
+        fputs("FAIL: Living Connectome history is not sampling activity\n", stderr)
         return 1
     }
 
@@ -245,9 +228,8 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print(String(format: "  post-touch forward/reverse: %.3f / %.3f", touched.forward, touched.reverse))
     print(String(format: "  articulated body max error: %.6f px", world.maximumSegmentError()))
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
-    print("  movement demonstrations: \(MotionShowcase.allCases.count)")
     print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")
-    print("  Movement Lab controls: \(movementLab.motionButtonCount)")
+    print("  Living Connectome history samples: \(neuralView.sampleCount)")
     return 0
 }
 
@@ -260,9 +242,9 @@ do {
        CommandLine.arguments.indices.contains(previewIndex + 1) {
         exit(renderPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1]))
     }
-    if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-lab-preview"),
+    if let previewIndex = CommandLine.arguments.firstIndex(of: "--render-neural-preview"),
        CommandLine.arguments.indices.contains(previewIndex + 1) {
-        exit(renderMovementLabPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1]))
+        exit(renderNeuralPreview(connectome: connectome, path: CommandLine.arguments[previewIndex + 1]))
     }
 
     let app = NSApplication.shared

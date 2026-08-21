@@ -8,7 +8,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var wormView: WormView!
     private var neuralWindow: NSPanel!
     private var neuralView: NeuralMapView!
-    private var movementLab: MovementLabController!
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var previousTick = ProcessInfo.processInfo.systemUptime
@@ -30,13 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let launchScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
         configureOverlay(on: launchScreen)
         configureNeuralWindow()
-        configureMovementLab()
         configureMenuBar()
         startLoop()
-        movementLab.show()
-        if CommandLine.arguments.contains("--show-neural-map") {
-            showNeuralMap()
-        }
+        showNeuralMap()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -73,14 +68,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configureNeuralWindow() {
-        let frame = NSRect(x: 0, y: 0, width: 940, height: 620)
+        let frame = NSRect(x: 0, y: 0, width: 1_100, height: 720)
         neuralWindow = NSPanel(
             contentRect: frame,
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        neuralWindow.title = "DesktopWorm · Neural Activity"
+        neuralWindow.title = "DesktopWorm · Living Connectome"
+        neuralWindow.appearance = NSAppearance(named: .darkAqua)
         neuralWindow.titlebarAppearsTransparent = true
         neuralWindow.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.045, blue: 0.065, alpha: 1)
         neuralWindow.isFloatingPanel = true
@@ -88,22 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         neuralWindow.level = .floating
         neuralWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         neuralWindow.isReleasedWhenClosed = false
-        neuralWindow.minSize = NSSize(width: 760, height: 500)
+        neuralWindow.minSize = NSSize(width: 920, height: 620)
         neuralWindow.center()
 
-        neuralView = NeuralMapView(frame: frame, engine: engine)
+        neuralView = NeuralMapView(frame: frame, engine: engine, world: world)
         neuralView.autoresizingMask = [.width, .height]
         neuralWindow.contentView = neuralView
-    }
-
-    private func configureMovementLab() {
-        movementLab = MovementLabController()
-        movementLab.onMotion = { [weak self] motion in
-            self?.runMotion(motion)
-        }
-        movementLab.onShowNeuralMap = { [weak self] in
-            self?.showNeuralMap()
-        }
     }
 
     private func configureMenuBar() {
@@ -120,8 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(behaviorItem)
         menu.addItem(.separator())
 
-        menu.addItem(item("Open Movement Lab", action: #selector(showMovementLab), key: "l"))
-        menu.addItem(item("Show Neural Map", action: #selector(showNeuralMap), key: "n"))
+        menu.addItem(item("Show Living Connectome", action: #selector(showNeuralMap), key: "n"))
         menu.addItem(item("Touch Stimulus", action: #selector(touchStimulus), key: "t"))
         menu.addItem(item("Food / Chemical Signal", action: #selector(foodStimulus), key: "f"))
         menu.addItem(item("Move Worm to Cursor", action: #selector(moveToCursor), key: "m"))
@@ -178,11 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let dt = min(1.0 / 20.0, max(1.0 / 240.0, now - previousTick))
         previousTick = now
         if paused {
-            movementLab.update(
-                behavior: world.behavior,
-                motor: world.lastMotor,
-                active: engine.strongestActiveNeurons(limit: 5)
-            )
+            neuralView.sample()
             return
         }
 
@@ -196,11 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mouseLocal = CGPoint(x: mouseGlobal.x - frame.minX, y: mouseGlobal.y - frame.minY)
         world.update(dt: dt, bounds: wormView.bounds, engine: engine, mouse: mouseLocal)
         behaviorItem.title = "Behavior · \(world.behavior.rawValue)"
-        movementLab.update(
-            behavior: world.behavior,
-            motor: world.lastMotor,
-            active: engine.strongestActiveNeurons(limit: 5)
-        )
+        neuralView.sample()
         wormView.needsDisplay = true
         if neuralWindow.isVisible {
             neuralView.needsDisplay = true
@@ -212,29 +189,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    @objc private func showMovementLab() {
-        movementLab.show()
-    }
-
     @objc private func touchStimulus() {
         world.triggerTouch(engine: engine)
     }
 
     @objc private func foodStimulus() {
         world.triggerFood(engine: engine)
-    }
-
-    private func runMotion(_ motion: MotionShowcase) {
-        if paused {
-            paused = false
-            world.setPaused(false)
-            pauseItem.title = "Pause"
-        }
-        let global = NSEvent.mouseLocation
-        let frame = overlayWindow.frame
-        let target = CGPoint(x: global.x - frame.minX, y: global.y - frame.minY)
-        world.demonstrate(motion, engine: engine, target: target)
-        behaviorItem.title = "Behavior · \(world.behavior.rawValue)"
     }
 
     @objc private func moveToCursor() {
