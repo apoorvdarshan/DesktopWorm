@@ -16,6 +16,18 @@
   <a href="CREDITS.md">Scientific credits</a>
 </p>
 
+## Demo
+
+<p align="center">
+  <a href="https://youtu.be/IuXMyePoKhs">
+    <img src="https://img.youtube.com/vi/IuXMyePoKhs/maxresdefault.jpg" alt="Watch DesktopWorm running on macOS" width="820">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/IuXMyePoKhs"><strong>▶ Watch DesktopWorm in action</strong></a>
+</p>
+
 DesktopWorm uses the complete 302-neuron *Caenorhabditis elegans*
 hermaphrodite connectome from OpenWorm c302.
 
