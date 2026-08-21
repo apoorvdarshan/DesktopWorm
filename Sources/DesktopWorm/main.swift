@@ -50,7 +50,7 @@ func renderNeuralPreview(connectome: Connectome, path: String) -> Int32 {
     _ = NSApplication.shared
     let engine = NeuralEngine(connectome: connectome)
     let world = WormWorld()
-    let size = CGSize(width: 1_100, height: 720)
+    let size = CGSize(width: 520, height: 340)
     let bounds = CGRect(origin: .zero, size: size)
     world.place(at: CGPoint(x: 520, y: 380))
     let view = NeuralMapView(frame: bounds, engine: engine, world: world)
@@ -218,6 +218,16 @@ func runSelfTest(connectome: Connectome) -> Int32 {
         fputs("FAIL: Living Connectome history is not sampling activity\n", stderr)
         return 1
     }
+    let testDisplay = CGRect(x: 1_440, y: 24, width: 1_920, height: 1_056)
+    let hudOrigin = AppDelegate.connectomeHUDOrigin(
+        windowSize: NSSize(width: 520, height: 362),
+        visibleFrame: testDisplay
+    )
+    guard hudOrigin.x == testDisplay.maxX - 538,
+          hudOrigin.y == testDisplay.minY + 18 else {
+        fputs("FAIL: compact connectome HUD is not anchored bottom-right\n", stderr)
+        return 1
+    }
 
     print("PASS: OpenWorm graph loaded")
     print("  neurons: \(connectome.neurons.count)")
@@ -230,6 +240,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print("  behaviors: crawl, sense, head sweep, shallow/deep turn, approach, dwell, reverse, omega, recovery, pause")
     print("  spontaneous repertoire states observed: \(spontaneousBehaviors.count)")
     print("  Living Connectome history samples: \(neuralView.sampleCount)")
+    print("  compact HUD placement: bottom-right on active display")
     return 0
 }
 

@@ -25,12 +25,14 @@ chemotaxis is staged: the worm samples a target, visibly reorients its body,
 then approaches the sampled position instead of being continuously dragged by
 the pointer.
 
-The Living Connectome window opens at launch. It shows all 302 neurons in a
-clearly labeled functional-flow layout, activity-weighted connections, the most
-active cells and transmitters, live forward/reverse command-interneuron drive,
-dorsal and ventral muscle activity, and a rolling motor-circuit history. The
-layout explicitly says it is functional rather than anatomical, and scientific
-badges distinguish OpenWorm-derived anatomy from modeled dynamics and behavior.
+The Living Connectome opens as a compact 520 × 340 floating HUD in the
+bottom-right of the active display. It shows all 302 neurons in a clearly
+labeled functional-flow layout, activity-weighted connections, the most active
+cells, live forward/reverse command-interneuron drive, dorsal and ventral muscle
+activity, and the current autonomous behavior. Resize it larger to reveal the
+rolling history, transmitters and expanded scientific boundary. The layout says
+it is functional rather than anatomical, and badges distinguish OpenWorm data
+from modeled dynamics and behavior.
 
 ## Run
 

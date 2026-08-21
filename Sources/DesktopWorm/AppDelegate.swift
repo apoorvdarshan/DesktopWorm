@@ -23,12 +23,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
 
+    static func connectomeHUDOrigin(windowSize: NSSize, visibleFrame: NSRect) -> CGPoint {
+        CGPoint(
+            x: max(visibleFrame.minX + 12, visibleFrame.maxX - windowSize.width - 18),
+            y: visibleFrame.minY + 18
+        )
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         let mouse = NSEvent.mouseLocation
         let launchScreen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
         configureOverlay(on: launchScreen)
-        configureNeuralWindow()
+        configureNeuralWindow(on: launchScreen)
         configureMenuBar()
         startLoop()
         showNeuralMap()
@@ -67,8 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayWindow.orderFrontRegardless()
     }
 
-    private func configureNeuralWindow() {
-        let frame = NSRect(x: 0, y: 0, width: 1_100, height: 720)
+    private func configureNeuralWindow(on selectedScreen: NSScreen?) {
+        let contentSize = NSSize(width: 520, height: 340)
+        let frame = NSRect(origin: .zero, size: contentSize)
         neuralWindow = NSPanel(
             contentRect: frame,
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
@@ -84,8 +92,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         neuralWindow.level = .floating
         neuralWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         neuralWindow.isReleasedWhenClosed = false
-        neuralWindow.minSize = NSSize(width: 920, height: 620)
-        neuralWindow.center()
+        neuralWindow.minSize = NSSize(width: 440, height: 280)
+        neuralWindow.animationBehavior = .utilityWindow
+
+        let visibleFrame = (selectedScreen ?? NSScreen.main)?.visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
+        let placedFrame = neuralWindow.frame
+        neuralWindow.setFrameOrigin(Self.connectomeHUDOrigin(
+            windowSize: placedFrame.size,
+            visibleFrame: visibleFrame
+        ))
 
         neuralView = NeuralMapView(frame: frame, engine: engine, world: world)
         neuralView.autoresizingMask = [.width, .height]

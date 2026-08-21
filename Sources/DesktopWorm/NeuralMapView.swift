@@ -56,6 +56,11 @@ final class NeuralMapView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         drawBackground(context)
 
+        if bounds.width < 720 || bounds.height < 520 {
+            drawCompact(context: context)
+            return
+        }
+
         let sidebarWidth = min(300, max(260, bounds.width * 0.27))
         let sidebarX = bounds.maxX - sidebarWidth - 26
         let contentTop = bounds.maxY - 130
@@ -72,6 +77,116 @@ final class NeuralMapView: NSView {
         drawGraph(in: graphRect, context: context)
         drawTimeline(in: timelineRect, context: context)
         drawInspector(in: inspectorRect)
+    }
+
+    private func drawCompact(context: CGContext) {
+        drawText(
+            "LIVING CONNECTOME",
+            at: CGPoint(x: 15, y: bounds.maxY - 32),
+            font: .systemFont(ofSize: 15, weight: .bold),
+            color: .white
+        )
+        drawText(
+            "302 neurons · OpenWorm c302 data · modeled dynamics",
+            at: CGPoint(x: 16, y: bounds.maxY - 49),
+            font: .systemFont(ofSize: 8.5, weight: .medium),
+            color: NSColor.white.withAlphaComponent(0.48)
+        )
+        let liveDot = CGRect(x: bounds.maxX - 31, y: bounds.maxY - 30, width: 7, height: 7)
+        context.setFillColor(NSColor.systemGreen.withAlphaComponent(0.9).cgColor)
+        context.fillEllipse(in: liveDot)
+        drawText("LIVE", at: CGPoint(x: bounds.maxX - 62, y: bounds.maxY - 33), font: .monospacedSystemFont(ofSize: 7.5, weight: .semibold), color: .systemGreen)
+
+        let bottomHeight: CGFloat = 38
+        let inspectorWidth = min(170, bounds.width * 0.34)
+        let graphRect = CGRect(
+            x: 12,
+            y: bottomHeight + 10,
+            width: bounds.width - inspectorWidth - 30,
+            height: bounds.height - bottomHeight - 72
+        )
+        let inspectorRect = CGRect(
+            x: graphRect.maxX + 8,
+            y: graphRect.minY,
+            width: inspectorWidth,
+            height: graphRect.height
+        )
+        let statusRect = CGRect(x: 12, y: 9, width: bounds.width - 24, height: bottomHeight - 5)
+
+        drawCompactGraph(in: graphRect, context: context)
+        drawCompactInspector(in: inspectorRect)
+        drawCompactStatus(in: statusRect)
+    }
+
+    private func drawCompactGraph(in rect: CGRect, context: CGContext) {
+        drawCard(rect)
+        drawText("FUNCTIONAL FLOW · NOT ANATOMICAL POSITION", at: CGPoint(x: rect.minX + 10, y: rect.maxY - 18), font: .monospacedSystemFont(ofSize: 6.8, weight: .semibold), color: NSColor.white.withAlphaComponent(0.38))
+
+        let inner = CGRect(x: rect.minX + 9, y: rect.minY + 9, width: rect.width - 18, height: rect.height - 34)
+        let laneWidth = inner.width / 3
+        let colors: [NSColor] = [.systemCyan, .systemPurple, .systemOrange]
+        let titles = ["SENS", "INTER", "MOTOR"]
+        for index in 0..<3 {
+            let lane = CGRect(x: inner.minX + CGFloat(index) * laneWidth + 2, y: inner.minY, width: laneWidth - 4, height: inner.height)
+            let path = NSBezierPath(roundedRect: lane, xRadius: 7, yRadius: 7)
+            colors[index].withAlphaComponent(0.035).setFill()
+            path.fill()
+            colors[index].withAlphaComponent(0.09).setStroke()
+            path.lineWidth = 0.5
+            path.stroke()
+            drawText(titles[index], at: CGPoint(x: lane.minX + 5, y: lane.maxY - 13), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: colors[index].withAlphaComponent(0.68))
+        }
+
+        let nodeRect = CGRect(x: inner.minX + 3, y: inner.minY + 4, width: inner.width - 6, height: inner.height - 20)
+        let points = normalizedPositions.map {
+            CGPoint(x: nodeRect.minX + $0.x * nodeRect.width, y: nodeRect.minY + $0.y * nodeRect.height)
+        }
+        drawEdges(points: points, context: context, limit: 520)
+        drawNodes(points: points, context: context, labelLimit: 3)
+    }
+
+    private func drawCompactInspector(in rect: CGRect) {
+        drawCard(rect)
+        var y = rect.maxY - 19
+        drawText("MODELED BEHAVIOR", at: CGPoint(x: rect.minX + 10, y: y), font: .monospacedSystemFont(ofSize: 6.8, weight: .semibold), color: NSColor.white.withAlphaComponent(0.38))
+        y -= 20
+        drawText(world.behavior.rawValue.uppercased(), at: CGPoint(x: rect.minX + 10, y: y), font: .monospacedSystemFont(ofSize: 10.5, weight: .bold), color: .systemMint)
+        y -= 24
+
+        let state = engine.motorState()
+        let stats = [
+            ("FORWARD", state.forward, NSColor.systemGreen),
+            ("REVERSE", state.reverse, NSColor.systemPink),
+            ("DORSAL", state.dorsalMuscle, NSColor.systemCyan),
+            ("VENTRAL", state.ventralMuscle, NSColor.systemPurple),
+        ]
+        for (label, value, color) in stats {
+            drawText(label, at: CGPoint(x: rect.minX + 10, y: y), font: .monospacedSystemFont(ofSize: 6.8, weight: .medium), color: NSColor.white.withAlphaComponent(0.52))
+            drawText("\(Int((value * 100).rounded()))", at: CGPoint(x: rect.maxX - 25, y: y), font: .monospacedSystemFont(ofSize: 7, weight: .semibold), color: color)
+            drawBar(value: value, color: color, rect: CGRect(x: rect.minX + 10, y: y - 10, width: rect.width - 20, height: 3.5))
+            y -= 25
+        }
+
+        y -= 1
+        drawText("ACTIVE", at: CGPoint(x: rect.minX + 10, y: y), font: .monospacedSystemFont(ofSize: 6.8, weight: .semibold), color: NSColor.white.withAlphaComponent(0.38))
+        y -= 16
+        for (neuron, value) in engine.strongestActiveNeurons(limit: 3) {
+            drawText(neuron.id, at: CGPoint(x: rect.minX + 10, y: y), font: .monospacedSystemFont(ofSize: 7.5, weight: .semibold), color: color(for: neuron.category))
+            drawText("\(Int((value * 100).rounded()))%", at: CGPoint(x: rect.maxX - 29, y: y), font: .monospacedSystemFont(ofSize: 7, weight: .semibold), color: .white)
+            y -= 14
+        }
+
+        drawText("c302 DATA", at: CGPoint(x: rect.minX + 10, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: .systemGreen)
+        drawText("DYNAMICS MODELED", at: CGPoint(x: rect.minX + 64, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.5, weight: .semibold), color: .systemOrange)
+    }
+
+    private func drawCompactStatus(in rect: CGRect) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: 9, yRadius: 9)
+        NSColor.white.withAlphaComponent(0.04).setFill()
+        path.fill()
+        drawText("AVB/PVC", at: CGPoint(x: rect.minX + 10, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.7, weight: .semibold), color: .systemGreen)
+        drawText("AVA/AVD/AVE/RIM", at: CGPoint(x: rect.minX + 61, y: rect.minY + 11), font: .monospacedSystemFont(ofSize: 6.7, weight: .semibold), color: .systemPink)
+        drawText("autonomous repertoire · scientific boundary in expanded view", at: CGPoint(x: rect.maxX - 270, y: rect.minY + 11), font: .systemFont(ofSize: 7.2, weight: .regular), color: NSColor.white.withAlphaComponent(0.36))
     }
 
     private func drawBackground(_ context: CGContext) {
@@ -160,9 +275,9 @@ final class NeuralMapView: NSView {
         drawNodes(points: points, context: context)
     }
 
-    private func drawEdges(points: [CGPoint], context: CGContext) {
+    private func drawEdges(points: [CGPoint], context: CGContext, limit: Int = .max) {
         context.saveGState()
-        for edge in displayEdges {
+        for edge in displayEdges.prefix(limit) {
             let sourceActivity = engine.activity[edge.source]
             let targetActivity = engine.activity[edge.target]
             let active = max(sourceActivity, targetActivity)
@@ -182,10 +297,10 @@ final class NeuralMapView: NSView {
         context.restoreGState()
     }
 
-    private func drawNodes(points: [CGPoint], context: CGContext) {
+    private func drawNodes(points: [CGPoint], context: CGContext, labelLimit: Int = 7) {
         let topIndices = engine.activity.enumerated()
             .sorted { $0.element > $1.element }
-            .prefix(7)
+            .prefix(labelLimit)
             .map(\.offset)
         let labeled = Set(topIndices)
 
