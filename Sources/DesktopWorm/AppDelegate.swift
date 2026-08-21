@@ -1,6 +1,8 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    static let connectomeWindowStyleMask: NSWindow.StyleMask = [.titled, .closable, .resizable]
+
     private let engine: NeuralEngine
     private let world = WormWorld()
 
@@ -28,6 +30,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             x: max(visibleFrame.minX + 12, visibleFrame.maxX - windowSize.width - 18),
             y: visibleFrame.minY + 18
         )
+    }
+
+    static func makeStatusIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: 3.1, y: 11.8))
+            path.curve(
+                to: NSPoint(x: 8.9, y: 12.7),
+                controlPoint1: NSPoint(x: 4.1, y: 15.2),
+                controlPoint2: NSPoint(x: 7.0, y: 15.2)
+            )
+            path.curve(
+                to: NSPoint(x: 13.8, y: 10.3),
+                controlPoint1: NSPoint(x: 11.0, y: 10.1),
+                controlPoint2: NSPoint(x: 13.2, y: 12.8)
+            )
+            path.curve(
+                to: NSPoint(x: 8.6, y: 5.0),
+                controlPoint1: NSPoint(x: 14.4, y: 7.8),
+                controlPoint2: NSPoint(x: 11.6, y: 5.0)
+            )
+            path.curve(
+                to: NSPoint(x: 4.7, y: 6.8),
+                controlPoint1: NSPoint(x: 6.8, y: 5.0),
+                controlPoint2: NSPoint(x: 5.3, y: 5.5)
+            )
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            path.lineWidth = 1.75
+            NSColor.black.setStroke()
+            path.stroke()
+
+            let head = NSBezierPath(ovalIn: NSRect(x: 2.0, y: 10.7, width: 2.4, height: 2.4))
+            NSColor.black.setFill()
+            head.fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "DesktopWorm"
+        return image
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -79,13 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frame = NSRect(origin: .zero, size: contentSize)
         neuralWindow = NSPanel(
             contentRect: frame,
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: Self.connectomeWindowStyleMask,
             backing: .buffered,
             defer: false
         )
         neuralWindow.title = "DesktopWorm · Living Connectome"
         neuralWindow.appearance = NSAppearance(named: .darkAqua)
-        neuralWindow.titlebarAppearsTransparent = true
+        neuralWindow.titleVisibility = .hidden
+        neuralWindow.titlebarAppearsTransparent = false
         neuralWindow.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.045, blue: 0.065, alpha: 1)
         neuralWindow.isFloatingPanel = true
         neuralWindow.hidesOnDeactivate = false
@@ -109,7 +152,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "🪱"
+        statusItem.button?.title = ""
+        statusItem.button?.image = Self.makeStatusIcon()
+        statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "DesktopWorm · 302-neuron connectome"
 
         let menu = NSMenu()

@@ -246,6 +246,17 @@ func runSelfTest(connectome: Connectome) -> Int32 {
         fputs("FAIL: compact connectome HUD is not anchored bottom-right\n", stderr)
         return 1
     }
+    guard !AppDelegate.connectomeWindowStyleMask.contains(.fullSizeContentView) else {
+        fputs("FAIL: connectome content extends beneath the native title bar\n", stderr)
+        return 1
+    }
+    let statusIcon = AppDelegate.makeStatusIcon()
+    guard statusIcon.isTemplate,
+          statusIcon.size == NSSize(width: 18, height: 18),
+          statusIcon.accessibilityDescription == "DesktopWorm" else {
+        fputs("FAIL: menu-bar worm is not a native monochrome template icon\n", stderr)
+        return 1
+    }
 
     print("PASS: OpenWorm graph loaded")
     print("  neurons: \(connectome.neurons.count)")
@@ -261,6 +272,8 @@ func runSelfTest(connectome: Connectome) -> Int32 {
     print("  Living Connectome history samples: \(neuralView.sampleCount)")
     print("  schematic regions: head + nerve ring \(regionCounts[.anteriorComplex] ?? 0), ventral cord \(regionCounts[.ventralCord] ?? 0), body sensory \(regionCounts[.bodySensory] ?? 0), tail \(regionCounts[.tailGanglia] ?? 0)")
     print("  compact HUD placement: bottom-right on active display")
+    print("  title-bar safe area: native content separation")
+    print("  menu-bar icon: adaptive monochrome template")
     return 0
 }
 
