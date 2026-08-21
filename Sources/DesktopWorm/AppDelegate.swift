@@ -12,7 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var previousTick = ProcessInfo.processInfo.systemUptime
     private var paused = false
+    private var showsAnatomy = true
     private var pauseItem: NSMenuItem!
+    private var behaviorItem: NSMenuItem!
+    private var anatomyItem: NSMenuItem!
+    private var speedItems: [NSMenuItem] = []
 
     init(connectome: Connectome) {
         self.engine = NeuralEngine(connectome: connectome)
@@ -60,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayWindow.isReleasedWhenClosed = false
 
         wormView = WormView(frame: CGRect(origin: .zero, size: frame.size), world: world, engine: engine)
+        wormView.showsAnatomy = showsAnatomy
         overlayWindow.contentView = wormView
         overlayWindow.orderFrontRegardless()
     }
@@ -97,12 +102,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let heading = NSMenuItem(title: "DesktopWorm · 302 neurons", action: nil, keyEquivalent: "")
         heading.isEnabled = false
         menu.addItem(heading)
+        behaviorItem = NSMenuItem(title: "Behavior · Forward crawl", action: nil, keyEquivalent: "")
+        behaviorItem.isEnabled = false
+        menu.addItem(behaviorItem)
         menu.addItem(.separator())
 
         menu.addItem(item("Show Neural Map", action: #selector(showNeuralMap), key: "n"))
         menu.addItem(item("Touch Stimulus", action: #selector(touchStimulus), key: "t"))
         menu.addItem(item("Food / Chemical Signal", action: #selector(foodStimulus), key: "f"))
         menu.addItem(item("Move Worm to Cursor", action: #selector(moveToCursor), key: "m"))
+        menu.addItem(makeSpeedMenu())
+        anatomyItem = item("Show Internal Anatomy", action: #selector(toggleAnatomy), key: "")
+        anatomyItem.state = .on
+        menu.addItem(anatomyItem)
         pauseItem = item("Pause", action: #selector(togglePause), key: "p")
         menu.addItem(pauseItem)
         menu.addItem(item("Reset Neural State", action: #selector(reset), key: "r"))
@@ -110,6 +122,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item("About the Model", action: #selector(showAbout), key: ""))
         menu.addItem(item("Quit DesktopWorm", action: #selector(quit), key: "q"))
         statusItem.menu = menu
+    }
+
+    private func makeSpeedMenu() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Crawl Speed", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Crawl Speed")
+        speedItems = [
+            speedItem("Slow · 0.6×", scale: 0.6),
+            speedItem("Natural · 1.0×", scale: 1.0),
+            speedItem("Fast · 1.5×", scale: 1.5),
+        ]
+        speedItems.forEach(submenu.addItem)
+        parent.submenu = submenu
+        return parent
+    }
+
+    private func speedItem(_ title: String, scale: Double) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(changeSpeed(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = NSNumber(value: scale)
+        item.state = scale == 1.0 ? .on : .off
+        return item
     }
 
     private func item(_ title: String, action: Selector, key: String) -> NSMenuItem {
@@ -141,6 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let frame = overlayWindow.frame
         let mouseLocal = CGPoint(x: mouseGlobal.x - frame.minX, y: mouseGlobal.y - frame.minY)
         world.update(dt: dt, bounds: wormView.bounds, engine: engine, mouse: mouseLocal)
+        behaviorItem.title = "Behavior · \(world.behavior.rawValue)"
         wormView.needsDisplay = true
         if neuralWindow.isVisible {
             neuralView.needsDisplay = true
@@ -157,7 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func foodStimulus() {
-        engine.stimulateFood(1.4)
+        world.triggerFood(engine: engine)
     }
 
     @objc private func moveToCursor() {
@@ -172,7 +206,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func togglePause() {
         paused.toggle()
+        world.setPaused(paused)
         pauseItem.title = paused ? "Resume" : "Pause"
+        behaviorItem.title = "Behavior · \(world.behavior.rawValue)"
+    }
+
+    @objc private func toggleAnatomy() {
+        showsAnatomy.toggle()
+        wormView.showsAnatomy = showsAnatomy
+        anatomyItem.state = showsAnatomy ? .on : .off
+        wormView.needsDisplay = true
+    }
+
+    @objc private func changeSpeed(_ sender: NSMenuItem) {
+        guard let scale = (sender.representedObject as? NSNumber)?.doubleValue else { return }
+        world.speedScale = scale
+        speedItems.forEach { $0.state = $0 === sender ? .on : .off }
     }
 
     @objc private func reset() {

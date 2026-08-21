@@ -14,6 +14,14 @@ connectome activity window. The model includes:
 - chemical synapses and electrical gap junctions;
 - sensory, interneuron and motor-neuron activity visualization.
 
+The desktop body is a translucent ivory/amber rendering with a tapered head
+and tail, subtle pharynx and intestine, and fine cuticle rings. Its articulated
+40-point centerline holds a fixed body length. A traveling curvature wave
+generates traction rather than letting the worm slide independently of its
+body motion. The behavior controller supports forward crawling, touch-driven
+reversal, exploratory head sweeps, omega turns, food seeking, collision
+recovery and pause.
+
 ## Run
 
 Requirements: macOS 13+ and Xcode Command Line Tools.
@@ -23,8 +31,9 @@ Requirements: macOS 13+ and Xcode Command Line Tools.
 ```
 
 Use the 🪱 menu-bar item to show the neural map, inject touch or food stimuli,
-pause, reset or quit. The app does not request Accessibility, keyboard, camera,
-microphone or network permissions.
+choose the crawl speed, hide or show internal anatomy, pause, reset or quit.
+The app does not request Accessibility, keyboard, camera, microphone or network
+permissions.
 
 ## Verify
 

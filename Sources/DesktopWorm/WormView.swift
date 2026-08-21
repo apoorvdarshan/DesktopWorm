@@ -1,33 +1,77 @@
 import AppKit
 
+enum WormBehavior: String {
+    case forwardCrawl = "Forward crawl"
+    case reverseEscape = "Touch reverse"
+    case headSweep = "Head sweep"
+    case omegaTurn = "Omega turn"
+    case foodSeek = "Food seeking"
+    case collisionRecovery = "Collision recovery"
+    case paused = "Paused"
+}
+
 final class WormWorld {
+    private static let pointCount = 40
+    private static let segmentLength = 4.55
+
     private(set) var head = CGPoint(x: 500, y: 400)
     private(set) var heading = Double.pi * 0.15
     private(set) var phase = 0.0
-    private(set) var speed = 42.0
-    private(set) var isReversing = false
+    private(set) var speed = 0.0
+    private(set) var behavior: WormBehavior = .forwardCrawl
+    private(set) var points: [CGPoint] = []
     private(set) var lastMotor = MotorState(
         forward: 0, reverse: 0, left: 0, right: 0,
         dorsalMuscle: 0, ventralMuscle: 0, arousal: 0
     )
 
-    private var reverseRemaining = 0.0
-    private var turnImpulse = 0.0
+    var speedScale = 1.0
+
+    private var behaviorClock = 0.0
+    private var behaviorRemaining = 0.0
+    private var turnDirection = 1.0
     private var lastMouse: CGPoint?
     private var foodPulseClock = 0.0
+    private var spontaneousClock = 0.0
+    private var pausedBehavior: WormBehavior?
+
+    init() {
+        rebuildBody()
+    }
 
     func place(at point: CGPoint) {
         head = point
+        rebuildBody()
     }
 
     func triggerTouch(engine: NeuralEngine) {
         engine.stimulateTouch(1.25)
-        reverseRemaining = 1.25
-        turnImpulse = Bool.random() ? 1.0 : -1.0
+        turnDirection *= -1
+        enter(.reverseEscape, for: 1.15)
+    }
+
+    func triggerFood(engine: NeuralEngine) {
+        engine.stimulateFood(1.4)
+        enter(.foodSeek, for: 2.8)
+    }
+
+    func setPaused(_ paused: Bool) {
+        if paused, behavior != .paused {
+            pausedBehavior = behavior
+            behavior = .paused
+            speed = 0
+        } else if !paused, behavior == .paused {
+            behavior = pausedBehavior ?? .forwardCrawl
+            pausedBehavior = nil
+        }
     }
 
     func update(dt: Double, bounds: CGRect, engine: NeuralEngine, mouse: CGPoint) {
+        guard dt > 0, behavior != .paused else { return }
         lastMotor = engine.motorState()
+        behaviorClock += dt
+        spontaneousClock += dt
+
         let mouseVelocity: Double
         if let previous = lastMouse {
             mouseVelocity = hypot(mouse.x - previous.x, mouse.y - previous.y) / max(dt, 0.001)
@@ -37,86 +81,181 @@ final class WormWorld {
         lastMouse = mouse
 
         let distanceToMouse = hypot(mouse.x - head.x, mouse.y - head.y)
-        if distanceToMouse < 105 && mouseVelocity > 180 && reverseRemaining <= 0.1 {
+        if distanceToMouse < 95, mouseVelocity > 190, behavior != .reverseEscape {
             triggerTouch(engine: engine)
         }
 
         foodPulseClock -= dt
-        if distanceToMouse > 145 && distanceToMouse < 650 && foodPulseClock <= 0 {
-            engine.stimulateFood(0.34)
-            foodPulseClock = 0.18
+        if distanceToMouse > 130, distanceToMouse < 600, foodPulseClock <= 0 {
+            engine.stimulateFood(0.30)
+            foodPulseClock = 0.22
         }
 
-        if reverseRemaining > 0 {
-            reverseRemaining -= dt
-            isReversing = true
-        } else {
-            if isReversing {
-                turnImpulse = Bool.random() ? 1.0 : -1.0
-            }
-            isReversing = false
-        }
+        advanceBehavior(dt: dt)
+        let profile = movementProfile(mouse: mouse, distanceToMouse: distanceToMouse)
 
-        let neuralForward = max(0.12, lastMotor.forward)
-        let neuralReverse = lastMotor.reverse
-        speed += ((34 + neuralForward * 56 + lastMotor.arousal * 18) - speed) * min(1, dt * 2.8)
+        let imbalance = lastMotor.dorsalMuscle - lastMotor.ventralMuscle
+        let neuralBend = min(0.11, abs(imbalance) * 0.22)
+        let locomotorDrive = profile.travelDirection < 0 ? lastMotor.reverse : lastMotor.forward
+        let neuralGain = clamped(0.72 + locomotorDrive * 2.0, 0.72, 1.25)
+        let amplitude = profile.amplitude * neuralGain * (1 + lastMotor.arousal * 0.8) + neuralBend
+        let frequency = profile.frequency * (0.84 + locomotorDrive * 0.9 + lastMotor.arousal * 0.7)
+        phase += dt * 2 * .pi * frequency * profile.waveDirection
 
-        let neuralTurn = (lastMotor.right - lastMotor.left) * 1.6
-        var angularVelocity = neuralTurn + 0.24 * sin(phase * 0.19)
+        let neuralTurn = clamped((lastMotor.right - lastMotor.left) * 1.5, -0.42, 0.42)
+        heading += (profile.turnRate + neuralTurn) * dt
 
-        if !isReversing && distanceToMouse > 145 && distanceToMouse < 650 {
-            let desired = atan2(mouse.y - head.y, mouse.x - head.x)
-            angularVelocity += wrappedAngle(desired - heading) * (0.22 + lastMotor.forward * 0.12)
-        }
-        if abs(turnImpulse) > 0.01 {
-            angularVelocity += turnImpulse * 2.25
-            turnImpulse *= exp(-dt * 2.2)
-        }
+        // Propulsion is generated from body-wave power. With no bend or
+        // oscillation, traction is zero and the worm cannot slide.
+        let wavePower = clamped(amplitude * frequency / 0.56, 0, 1)
+        let targetSpeed = profile.travelDirection * speedScale * profile.maxSpeed * wavePower
+        speed += (targetSpeed - speed) * min(1, dt * 5.4)
+        head.x += cos(heading) * speed * dt
+        head.y += sin(heading) * speed * dt
 
-        heading += angularVelocity * dt
-        let movementSign = isReversing || neuralReverse > neuralForward * 1.9 ? -0.72 : 1.0
-        head.x += cos(heading) * speed * movementSign * dt
-        head.y += sin(heading) * speed * movementSign * dt
-
-        let activityTempo = 1.0 + lastMotor.arousal * 2.2
-        phase += dt * speed * 0.11 * activityTempo * movementSign
-
-        let margin: CGFloat = 95
+        var collided = false
+        let margin: CGFloat = 100
         if head.x < bounds.minX + margin {
             head.x = bounds.minX + margin
-            heading = Double.pi - heading
-            turnImpulse = 0.65
+            collided = true
+            turnDirection = 1
         } else if head.x > bounds.maxX - margin {
             head.x = bounds.maxX - margin
-            heading = Double.pi - heading
-            turnImpulse = -0.65
+            collided = true
+            turnDirection = -1
         }
         if head.y < bounds.minY + margin {
             head.y = bounds.minY + margin
-            heading = -heading
-            turnImpulse = -0.65
+            collided = true
+            turnDirection = head.x < bounds.midX ? -1 : 1
         } else if head.y > bounds.maxY - margin {
             head.y = bounds.maxY - margin
-            heading = -heading
-            turnImpulse = 0.65
+            collided = true
+            turnDirection = head.x < bounds.midX ? 1 : -1
+        }
+        if collided, behavior != .collisionRecovery {
+            enter(.collisionRecovery, for: 0.72)
+        }
+
+        solveBody(amplitude: amplitude, omegaBias: profile.omegaBias, dt: dt)
+    }
+
+    func bodyPoints() -> [CGPoint] {
+        points
+    }
+
+    func maximumSegmentError() -> Double {
+        zip(points, points.dropFirst()).map {
+            abs(hypot($1.x - $0.x, $1.y - $0.y) - Self.segmentLength)
+        }.max() ?? 0
+    }
+
+    private func advanceBehavior(dt: Double) {
+        if behaviorRemaining > 0 {
+            behaviorRemaining -= dt
+            if behaviorRemaining <= 0 {
+                switch behavior {
+                case .reverseEscape, .collisionRecovery:
+                    enter(.omegaTurn, for: 0.82)
+                default:
+                    enter(.forwardCrawl, for: 0)
+                }
+            }
+            return
+        }
+
+        if behavior == .forwardCrawl, spontaneousClock > 5.2 {
+            spontaneousClock = 0
+            enter(.headSweep, for: 1.45)
         }
     }
 
-    func bodyPoints(count: Int = 34) -> [CGPoint] {
-        let dorsalBalance = lastMotor.dorsalMuscle - lastMotor.ventralMuscle
-        let amplitude = 11.0 + min(8.0, abs(dorsalBalance) * 18.0) + lastMotor.arousal * 5.0
-        let perpendicular = CGVector(dx: -sin(heading), dy: cos(heading))
-        let backwards = CGVector(dx: -cos(heading), dy: -sin(heading))
+    private func movementProfile(mouse: CGPoint, distanceToMouse: Double) -> (
+        travelDirection: Double,
+        waveDirection: Double,
+        amplitude: Double,
+        frequency: Double,
+        maxSpeed: Double,
+        turnRate: Double,
+        omegaBias: Double
+    ) {
+        switch behavior {
+        case .forwardCrawl:
+            return (1, 1, 0.34, 1.25, 55, 0.07 * sin(behaviorClock * 0.55), 0)
+        case .reverseEscape:
+            return (-1, -1, 0.40, 1.62, 63, turnDirection * 0.18, 0)
+        case .headSweep:
+            return (0.18, 1, 0.27, 0.72, 40, turnDirection * 0.92 * sin(behaviorClock * 4.2), 0)
+        case .omegaTurn:
+            return (0.32, 1, 0.48, 1.08, 45, turnDirection * 2.35, turnDirection * 0.72)
+        case .foodSeek:
+            let desired = atan2(mouse.y - head.y, mouse.x - head.x)
+            let seekingTurn = distanceToMouse > 20 ? clamped(wrappedAngle(desired - heading) * 1.45, -1.35, 1.35) : 0
+            let sweep = 0.28 * sin(behaviorClock * 3.6)
+            return (0.72, 1, 0.31, 1.10, 52, seekingTurn + sweep, 0)
+        case .collisionRecovery:
+            return (-0.72, -1, 0.42, 1.48, 58, turnDirection * 0.55, 0)
+        case .paused:
+            return (0, 0, 0, 0, 0, 0, 0)
+        }
+    }
 
-        return (0..<count).map { index in
-            let t = Double(index) / Double(max(1, count - 1))
-            let along = Double(index) * 5.2
-            let wave = sin(phase - Double(index) * 0.52) * amplitude * pow(t, 0.62)
-            return CGPoint(
-                x: head.x + backwards.dx * along + perpendicular.dx * wave,
-                y: head.y + backwards.dy * along + perpendicular.dy * wave
+    private func solveBody(amplitude: Double, omegaBias: Double, dt: Double) {
+        guard points.count == Self.pointCount else {
+            rebuildBody()
+            return
+        }
+
+        var desired = Array(repeating: CGPoint.zero, count: Self.pointCount)
+        desired[0] = head
+        for index in 1..<Self.pointCount {
+            let t = Double(index) / Double(Self.pointCount - 1)
+            let envelope = pow(sin(.pi * t), 0.42)
+            let travelingWave = sin(phase - Double(index) * 0.49) * amplitude * envelope
+            let turnShape = omegaBias * pow(t, 0.72)
+            let segmentHeading = heading + travelingWave + turnShape
+            desired[index] = CGPoint(
+                x: desired[index - 1].x - cos(segmentHeading) * Self.segmentLength,
+                y: desired[index - 1].y - sin(segmentHeading) * Self.segmentLength
             )
         }
+
+        let follow = 1 - exp(-dt * 13.5)
+        points[0] = head
+        for index in 1..<points.count {
+            points[index].x += (desired[index].x - points[index].x) * follow
+            points[index].y += (desired[index].y - points[index].y) * follow
+        }
+
+        // Repeated projection preserves body length while allowing the centerline
+        // to relax toward the neural/motor-driven target curvature.
+        for _ in 0..<4 {
+            points[0] = head
+            for index in 1..<points.count {
+                let dx = points[index].x - points[index - 1].x
+                let dy = points[index].y - points[index - 1].y
+                let distance = max(0.0001, hypot(dx, dy))
+                points[index] = CGPoint(
+                    x: points[index - 1].x + dx / distance * Self.segmentLength,
+                    y: points[index - 1].y + dy / distance * Self.segmentLength
+                )
+            }
+        }
+    }
+
+    private func rebuildBody() {
+        points = (0..<Self.pointCount).map { index in
+            CGPoint(
+                x: head.x - cos(heading) * Double(index) * Self.segmentLength,
+                y: head.y - sin(heading) * Double(index) * Self.segmentLength
+            )
+        }
+    }
+
+    private func enter(_ next: WormBehavior, for duration: Double) {
+        behavior = next
+        behaviorClock = 0
+        behaviorRemaining = duration
     }
 
     private func wrappedAngle(_ angle: Double) -> Double {
@@ -125,11 +264,16 @@ final class WormWorld {
         while value < -.pi { value += 2 * .pi }
         return value
     }
+
+    private func clamped(_ value: Double, _ lower: Double, _ upper: Double) -> Double {
+        min(upper, max(lower, value))
+    }
 }
 
 final class WormView: NSView {
     let world: WormWorld
     let engine: NeuralEngine
+    var showsAnatomy = true
 
     init(frame: CGRect, world: WormWorld, engine: NeuralEngine) {
         self.world = world
@@ -149,94 +293,108 @@ final class WormView: NSView {
         super.draw(dirtyRect)
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         let points = world.bodyPoints()
+        guard points.count > 2 else { return }
 
-        context.saveGState()
-        context.setShadow(offset: CGSize(width: 0, height: -5), blur: 11, color: NSColor.black.withAlphaComponent(0.48).cgColor)
-        strokeBody(points: points, context: context, outer: true)
-        context.restoreGState()
-
-        strokeBody(points: points, context: context, outer: false)
-        drawHead(at: points[0], toward: points[1], context: context)
-        drawNeuralGlow(at: points[0], context: context)
+        drawShadow(points: points, context: context)
+        drawBody(points: points, context: context)
+        if showsAnatomy {
+            drawInternalAnatomy(points: points, context: context)
+        }
+        drawCuticle(points: points, context: context)
     }
 
-    private func strokeBody(points: [CGPoint], context: CGContext, outer: Bool) {
+    private func bodyRadius(at progress: CGFloat) -> CGFloat {
+        let core = pow(max(0, sin(.pi * progress)), 0.34)
+        let headTaper = min(1, 0.38 + progress * 5.2)
+        return max(0.55, 6.2 * core * headTaper)
+    }
+
+    private func drawShadow(points: [CGPoint], context: CGContext) {
+        context.saveGState()
+        context.setShadow(offset: CGSize(width: 0, height: -3), blur: 7, color: NSColor.black.withAlphaComponent(0.32).cgColor)
+        context.setStrokeColor(NSColor.black.withAlphaComponent(0.12).cgColor)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.setLineWidth(11)
+        context.beginPath()
+        context.addLines(between: points)
+        context.strokePath()
+        context.restoreGState()
+    }
+
+    private func drawBody(points: [CGPoint], context: CGContext) {
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
         for index in 0..<(points.count - 1) {
-            let progress = CGFloat(index) / CGFloat(points.count - 1)
-            let taper = max(0.20, 1.0 - pow(progress, 1.7))
-            let width: CGFloat = outer ? 17 * taper + 2 : 11 * taper + 1
-            let hueShift = CGFloat(sin(Double(index) * 0.55 + world.phase) * 0.04)
-            let color: NSColor
-            if outer {
-                color = NSColor(calibratedRed: 0.08, green: 0.20, blue: 0.12, alpha: 0.82)
-            } else {
-                color = NSColor(
-                    calibratedRed: 0.42 + hueShift,
-                    green: 0.91,
-                    blue: 0.55 + hueShift,
-                    alpha: 0.94
-                )
-            }
-            context.setStrokeColor(color.cgColor)
-            context.setLineCap(.round)
-            context.setLineWidth(width)
+            let progress = CGFloat(index + 1) / CGFloat(points.count - 1)
+            let radius = bodyRadius(at: progress)
+
+            context.setStrokeColor(NSColor(calibratedRed: 0.28, green: 0.22, blue: 0.13, alpha: 0.52).cgColor)
+            context.setLineWidth(radius * 2 + 1.1)
+            context.beginPath()
+            context.move(to: points[index])
+            context.addLine(to: points[index + 1])
+            context.strokePath()
+
+            let warmth = 0.035 * sin(CGFloat(index) * 0.42)
+            context.setStrokeColor(NSColor(
+                calibratedRed: 0.88 + warmth,
+                green: 0.81 + warmth * 0.55,
+                blue: 0.63,
+                alpha: 0.78
+            ).cgColor)
+            context.setLineWidth(radius * 2)
             context.beginPath()
             context.move(to: points[index])
             context.addLine(to: points[index + 1])
             context.strokePath()
         }
+    }
 
-        context.setStrokeColor(NSColor.white.withAlphaComponent(outer ? 0 : 0.36).cgColor)
-        context.setLineWidth(1.35)
+    private func drawInternalAnatomy(points: [CGPoint], context: CGContext) {
+        let intestine = Array(points[8...33])
+        context.setStrokeColor(NSColor(calibratedRed: 0.43, green: 0.29, blue: 0.13, alpha: 0.26).cgColor)
+        context.setLineWidth(3.1)
         context.setLineCap(.round)
+        context.beginPath()
+        context.addLines(between: intestine)
+        context.strokePath()
+
+        let pharynx = Array(points[1...9])
+        context.setStrokeColor(NSColor(calibratedRed: 0.54, green: 0.32, blue: 0.15, alpha: 0.46).cgColor)
+        context.setLineWidth(2.0)
+        context.beginPath()
+        context.addLines(between: pharynx)
+        context.strokePath()
+
+        for index in [4, 7] {
+            context.setFillColor(NSColor(calibratedRed: 0.48, green: 0.28, blue: 0.12, alpha: 0.32).cgColor)
+            context.fillEllipse(in: CGRect(x: points[index].x - 2.4, y: points[index].y - 2.4, width: 4.8, height: 4.8))
+        }
+    }
+
+    private func drawCuticle(points: [CGPoint], context: CGContext) {
+        context.setLineCap(.round)
+        context.setStrokeColor(NSColor(calibratedWhite: 1.0, alpha: 0.25).cgColor)
+        context.setLineWidth(0.75)
         context.beginPath()
         context.addLines(between: points)
         context.strokePath()
-    }
 
-    private func drawHead(at head: CGPoint, toward neck: CGPoint, context: CGContext) {
-        let angle = atan2(head.y - neck.y, head.x - neck.x)
-        context.saveGState()
-        context.translateBy(x: head.x, y: head.y)
-        context.rotate(by: angle)
-
-        let headRect = CGRect(x: -8, y: -7, width: 19, height: 14)
-        context.setFillColor(NSColor(calibratedRed: 0.62, green: 1.0, blue: 0.72, alpha: 0.95).cgColor)
-        context.fillEllipse(in: headRect)
-
-        context.setFillColor(NSColor(calibratedRed: 0.15, green: 0.55, blue: 0.30, alpha: 0.82).cgColor)
-        context.fillEllipse(in: CGRect(x: 2.5, y: -4, width: 6, height: 8))
-
-        context.setStrokeColor(NSColor(calibratedRed: 0.62, green: 1, blue: 0.8, alpha: 0.65).cgColor)
-        context.setLineWidth(1)
-        for offset in [-4.0, 4.0] {
+        for index in stride(from: 3, to: points.count - 2, by: 3) {
+            let progress = CGFloat(index) / CGFloat(points.count - 1)
+            let radius = bodyRadius(at: progress) * 0.72
+            let dx = points[index + 1].x - points[index - 1].x
+            let dy = points[index + 1].y - points[index - 1].y
+            let length = max(0.001, hypot(dx, dy))
+            let nx = -dy / length
+            let ny = dx / length
+            context.setStrokeColor(NSColor(calibratedRed: 0.30, green: 0.22, blue: 0.13, alpha: 0.11).cgColor)
+            context.setLineWidth(0.55)
             context.beginPath()
-            context.move(to: CGPoint(x: 7, y: offset * 0.55))
-            context.addLine(to: CGPoint(x: 15, y: offset))
+            context.move(to: CGPoint(x: points[index].x - nx * radius, y: points[index].y - ny * radius))
+            context.addLine(to: CGPoint(x: points[index].x + nx * radius, y: points[index].y + ny * radius))
             context.strokePath()
         }
-        context.restoreGState()
-    }
-
-    private func drawNeuralGlow(at head: CGPoint, context: CGContext) {
-        let arousal = engine.motorState().arousal
-        let radius = CGFloat(9 + arousal * 18)
-        let colors = [
-            NSColor.systemCyan.withAlphaComponent(0.28).cgColor,
-            NSColor.systemGreen.withAlphaComponent(0).cgColor,
-        ] as CFArray
-        guard let gradient = CGGradient(
-            colorsSpace: CGColorSpaceCreateDeviceRGB(),
-            colors: colors,
-            locations: [0, 1]
-        ) else { return }
-        context.drawRadialGradient(
-            gradient,
-            startCenter: head,
-            startRadius: 0,
-            endCenter: head,
-            endRadius: radius,
-            options: []
-        )
     }
 }

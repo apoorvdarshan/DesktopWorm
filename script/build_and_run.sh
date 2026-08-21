@@ -46,9 +46,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>0.2.0</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>2</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>LSUIElement</key>
@@ -60,6 +60,8 @@ cat >"$INFO_PLIST" <<PLIST
 PLIST
 
 /usr/bin/xattr -cr "$APP_BUNDLE"
+/usr/bin/xattr -dr com.apple.FinderInfo "$APP_BUNDLE" 2>/dev/null || true
+/usr/bin/xattr -dr 'com.apple.fileprovider.fpfs#P' "$APP_BUNDLE" 2>/dev/null || true
 /usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
 
 open_app() {
