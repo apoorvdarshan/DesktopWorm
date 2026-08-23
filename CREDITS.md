@@ -2,7 +2,7 @@
 
 ## Project
 
-DesktopWorm was created by [Apoorv Darshan](https://github.com/apoorvdarshan).
+DesktopWorm was created by [Apoorv Darshan](https://github.com/aopv).
 The application code and original visual design in this repository are released
 under the [MIT License](LICENSE).
 
