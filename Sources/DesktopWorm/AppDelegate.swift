@@ -2,7 +2,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static let connectomeWindowStyleMask: NSWindow.StyleMask = [.titled, .closable, .resizable]
-    static let repositoryURL = URL(string: "https://github.com/aopv/DesktopWorm")!
+    static let repositoryURL = URL(string: "https://github.com/apoorvdarshan/DesktopWorm")!
     static let developerXURL = URL(string: "https://x.com/apoorvdarshan")!
 
     private let engine: NeuralEngine

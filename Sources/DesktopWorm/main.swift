@@ -397,7 +397,7 @@ func runSelfTest(connectome: Connectome) -> Int32 {
         fputs("FAIL: menu-bar worm is not a native monochrome template icon\n", stderr)
         return 1
     }
-    guard AppDelegate.repositoryURL.absoluteString == "https://github.com/aopv/DesktopWorm",
+    guard AppDelegate.repositoryURL.absoluteString == "https://github.com/apoorvdarshan/DesktopWorm",
           AppDelegate.developerXURL.absoluteString == "https://x.com/apoorvdarshan" else {
         fputs("FAIL: menu-bar community links are invalid\n", stderr)
         return 1
